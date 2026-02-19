@@ -128,6 +128,54 @@ export class CustomersService {
     };
   }
 
+  async getHistoryByPhone(phoneNumber: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { phoneNumber },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const [activities, redeemedRewards] = await Promise.all([
+      this.prisma.activity.findMany({
+        where: { customerId: phoneNumber, status: 'APPROVED' },
+        include: { branch: { include: { partner: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.reward.findMany({
+        where: { customerId: phoneNumber, status: 'REDEEMED' },
+        include: { partner: true, redeemedBranch: true },
+        orderBy: { redeemedAt: 'desc' },
+        take: 50,
+      }),
+    ]);
+
+    return {
+      activities: activities.map((a) => ({
+        id: a.id,
+        customerId: a.customerId,
+        branchId: a.branchId,
+        staffId: a.staffId,
+        status: a.status,
+        value: a.value != null ? Number(a.value) : null,
+        createdAt: a.createdAt,
+        branch: a.branch,
+        partner: a.branch.partner,
+      })),
+      redeemedRewards: redeemedRewards.map((r) => ({
+        id: r.id,
+        customerId: r.customerId,
+        partnerId: r.partnerId,
+        status: r.status,
+        expiryDate: r.expiryDate,
+        createdAt: r.createdAt,
+        redeemedAt: r.redeemedAt,
+        redeemedBranchId: r.redeemedBranchId,
+        partner: r.partner,
+        redeemedBranch: r.redeemedBranch,
+      })),
+    };
+  }
+
   async registerAtBranch(branchId: string, phoneNumber: string, otp: string): Promise<Customer> {
     if (!isOtpValid(otp)) {
       throw new BadRequestException('Invalid OTP');

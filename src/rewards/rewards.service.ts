@@ -38,8 +38,8 @@ export class RewardsService {
     }
     return this.prisma.reward.update({
       where: { id },
-      data: { status: 'REDEEMED' },
-      include: { customer: true, partner: true },
+      data: { status: 'REDEEMED', redeemedAt: new Date() },
+      include: { customer: true, partner: true, redeemedBranch: true },
     });
   }
 }
