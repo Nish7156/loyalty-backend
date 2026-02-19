@@ -19,10 +19,19 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
     return `branch_${branchId}`;
   }
 
+  private getCustomerRoomName(customerId: string): string {
+    return `customer_${customerId}`;
+  }
+
   handleConnection(client: { id: string; handshake: { query?: Record<string, string> }; join: (room: string) => void }) {
-    const branchId = client.handshake?.query?.branchId;
+    const query = client.handshake?.query ?? {};
+    const branchId = query.branchId as string | undefined;
     if (branchId) {
       client.join(this.getRoomName(branchId));
+    }
+    const customerId = query.customerId as string | undefined;
+    if (customerId) {
+      client.join(this.getCustomerRoomName(customerId));
     }
   }
 
@@ -44,5 +53,9 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   emitCheckinUpdated(branchId: string, payload: { id: string; status: string }): void {
     this.server.to(this.getRoomName(branchId)).emit('checkin_updated', payload);
+  }
+
+  emitCheckinUpdatedToCustomer(customerId: string, payload: { id: string; status: string }): void {
+    this.server.to(this.getCustomerRoomName(customerId)).emit('checkin_updated', payload);
   }
 }

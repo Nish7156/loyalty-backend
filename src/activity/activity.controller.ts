@@ -43,6 +43,9 @@ export class ActivityController {
     if (result.branchId) {
       this.activityGateway.emitCheckinUpdated(result.branchId, { id: result.id, status: result.status });
     }
+    if (result.customerId) {
+      this.activityGateway.emitCheckinUpdatedToCustomer(result.customerId, { id: result.id, status: result.status });
+    }
     return result;
   }
 }
