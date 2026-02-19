@@ -95,7 +95,7 @@ export class ActivityService {
     };
   }
 
-  async approveOrReject(activityId: string, status: 'APPROVED' | 'REJECTED', staffId: string) {
+  async approveOrReject(activityId: string, status: 'APPROVED' | 'REJECTED', staffId: string, value?: number) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
       include: { branch: { include: { partner: true } }, customer: true },
@@ -115,9 +115,14 @@ export class ActivityService {
 
     const threshold = this.getStreakThreshold(activity.branch);
     const result = await this.prisma.$transaction(async (tx) => {
+      const updateData: { status: ActivityStatus; staffId: string; value?: Decimal } = {
+        status: ActivityStatus.APPROVED,
+        staffId,
+      };
+      if (value != null) updateData.value = new Decimal(value);
       const updated = await tx.activity.update({
         where: { id: activityId },
-        data: { status: ActivityStatus.APPROVED, staffId },
+        data: updateData,
         include: { customer: true, branch: true },
       });
 

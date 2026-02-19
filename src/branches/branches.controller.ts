@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { User } from '@prisma/client';
+import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
@@ -10,13 +12,17 @@ export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}
 
   @Post()
-  create(@Body() dto: CreateBranchDto) {
-    return this.branchesService.create(dto);
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
+  create(@Body() dto: CreateBranchDto, @Req() req: { user: User }) {
+    return this.branchesService.create(dto, req.user);
   }
 
   @Get()
-  findAll() {
-    return this.branchesService.findAll();
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
+  findAll(@Req() req: { user: User }) {
+    return this.branchesService.findAll(req.user);
   }
 
   @Get(':id')

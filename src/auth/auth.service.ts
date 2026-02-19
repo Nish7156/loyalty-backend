@@ -35,9 +35,7 @@ export class AuthService {
   ) {}
 
   async sendOtp(phone: string): Promise<{ success: true; otp?: string }> {
-    const user = await this.prisma.user.findFirst({
-      where: { phone },
-    });
+    const user = await this.prisma.user.findFirst({ where: { phone } });
     if (user) {
       const code = generateOtp();
       setOtp(phone, code, 'platform');
@@ -45,9 +43,8 @@ export class AuthService {
       if (process.env.NODE_ENV !== 'production') res.otp = code;
       return res;
     }
-    const staff = await this.prisma.staff.findFirst({
-      where: { phone },
-    });
+
+    const staff = await this.prisma.staff.findFirst({ where: { phone } });
     if (staff) {
       const code = generateOtp();
       setOtp(phone, code, 'staff');
@@ -55,6 +52,7 @@ export class AuthService {
       if (process.env.NODE_ENV !== 'production') res.otp = code;
       return res;
     }
+
     throw new BadRequestException('Phone not registered');
   }
 
@@ -115,7 +113,7 @@ export class AuthService {
       where: { phone },
       include: { branch: true },
     });
-    if (!staff || !(await bcrypt.compare(password, staff.password))) {
+    if (!staff || !staff.password || !(await bcrypt.compare(password, staff.password))) {
       throw new UnauthorizedException('Invalid phone or password');
     }
     return staff;

@@ -39,7 +39,7 @@ export class ActivityController {
     @Body() dto: UpdateActivityStatusDto,
     @Req() req: { user: Staff },
   ) {
-    const result = await this.activityService.approveOrReject(id, dto.status, req.user.id);
+    const result = await this.activityService.approveOrReject(id, dto.status, req.user.id, dto.value);
     if (result.branchId) {
       this.activityGateway.emitCheckinUpdated(result.branchId, { id: result.id, status: result.status });
     }

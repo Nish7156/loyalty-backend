@@ -1,6 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
-import { Staff, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
@@ -11,7 +10,7 @@ type UserWithPartners = { id: string; role: string; ownedPartners: { id: string 
 export class StaffService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateStaffDto, user?: UserWithPartners): Promise<Omit<Staff, 'password'>> {
+  async create(dto: CreateStaffDto, user?: UserWithPartners) {
     if (user) {
       const branch = await this.prisma.branch.findUnique({
         where: { id: dto.branchId },
@@ -24,17 +23,10 @@ export class StaffService {
         throw new ForbiddenException('Not allowed to create staff for this branch');
       }
     }
-    const hashed = await bcrypt.hash(dto.password, 10);
-    const staff = await this.prisma.staff.create({
-      data: {
-        name: dto.name,
-        phone: dto.phone,
-        password: hashed,
-        branchId: dto.branchId,
-      },
+    return this.prisma.staff.create({
+      data: { name: dto.name, phone: dto.phone, branchId: dto.branchId },
+      select: { id: true, name: true, phone: true, branchId: true },
     });
-    const { password: _, ...rest } = staff;
-    return rest;
   }
 
   async findAll(args?: Prisma.StaffFindManyArgs) {
@@ -56,14 +48,12 @@ export class StaffService {
 
   async update(id: string, dto: UpdateStaffDto) {
     await this.findOne(id);
-    const data: Prisma.StaffUpdateInput = { name: dto.name, phone: dto.phone };
-    if (dto.password) data.password = await bcrypt.hash(dto.password, 10);
     const staff = await this.prisma.staff.update({
       where: { id },
-      data,
+      data: { name: dto.name, phone: dto.phone },
+      select: { id: true, name: true, phone: true, branchId: true },
     });
-    const { password: _, ...rest } = staff;
-    return rest;
+    return staff;
   }
 
   async remove(id: string) {

@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Branch, Prisma } from '@prisma/client';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Branch, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
@@ -8,7 +8,16 @@ import { UpdateBranchDto } from './dto/update-branch.dto';
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateBranchDto): Promise<Branch> {
+  async create(dto: CreateBranchDto, user?: User): Promise<Branch> {
+    if (user?.role === 'PARTNER_OWNER') {
+      const partner = await this.prisma.partner.findUnique({
+        where: { id: dto.partnerId },
+      });
+      if (!partner) throw new NotFoundException('Partner not found');
+      if (partner.ownerId !== user.id) {
+        throw new ForbiddenException('You can only create branches for your own store');
+      }
+    }
     return this.prisma.branch.create({
       data: {
         branchName: dto.branchName,
@@ -19,8 +28,10 @@ export class BranchesService {
     });
   }
 
-  async findAll(args?: Prisma.BranchFindManyArgs): Promise<Branch[]> {
-    return this.prisma.branch.findMany(args);
+  async findAll(user: User): Promise<Branch[]> {
+    const where: Prisma.BranchWhereInput =
+      user.role === 'PARTNER_OWNER' ? { partner: { ownerId: user.id } } : {};
+    return this.prisma.branch.findMany({ where });
   }
 
   async findOne(id: string): Promise<Branch> {

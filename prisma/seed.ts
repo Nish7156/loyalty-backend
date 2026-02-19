@@ -1,44 +1,30 @@
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 const SUPER_ADMIN_PHONE = '+15550000001';
 const STORE_OWNER_PHONE = '+15550000002';
 const SELLER_PHONE = '+15550000003';
-const PASSWORD = 'SuperAdmin@123';
 
 async function main() {
-  const hashed = await bcrypt.hash(PASSWORD, 10);
-
-  const superAdmin = await prisma.user.upsert({
+  // Super Admin — login via OTP only
+  await prisma.user.upsert({
     where: { phone: SUPER_ADMIN_PHONE },
-    update: { password: hashed, role: 'SUPER_ADMIN' },
-    create: {
-      phone: SUPER_ADMIN_PHONE,
-      password: hashed,
-      role: 'SUPER_ADMIN',
-    },
+    update: { role: 'SUPER_ADMIN' },
+    create: { phone: SUPER_ADMIN_PHONE, role: 'SUPER_ADMIN' },
   });
 
+  // Store Owner — created by super admin, login via OTP only
   const storeOwner = await prisma.user.upsert({
     where: { phone: STORE_OWNER_PHONE },
-    update: { password: hashed, role: 'PARTNER_OWNER' },
-    create: {
-      phone: STORE_OWNER_PHONE,
-      password: hashed,
-      role: 'PARTNER_OWNER',
-    },
+    update: { role: 'PARTNER_OWNER' },
+    create: { phone: STORE_OWNER_PHONE, role: 'PARTNER_OWNER' },
   });
 
   let partner = await prisma.partner.findFirst({ where: { ownerId: storeOwner.id } });
   if (!partner) {
     partner = await prisma.partner.create({
-      data: {
-        businessName: 'Seed Cafe',
-        industryType: 'F&B',
-        ownerId: storeOwner.id,
-      },
+      data: { businessName: 'Seed Cafe', industryType: 'F&B', ownerId: storeOwner.id },
     });
   }
 
@@ -48,27 +34,24 @@ async function main() {
       data: {
         branchName: 'Main Branch',
         partnerId: partner.id,
-        settings: { streakThreshold: 20, cooldownHours: 18 },
+        settings: { streakThreshold: 20, cooldownHours: 3 },
       },
     });
   }
 
-  const staffHashed = await bcrypt.hash('Seller@123', 10);
-  const seller = await prisma.staff.upsert({
+  // Seller — login via OTP only, no password
+  await prisma.staff.upsert({
     where: { branchId_phone: { branchId: branch.id, phone: SELLER_PHONE } },
-    update: { password: staffHashed },
-    create: {
-      name: 'Seed Seller',
-      phone: SELLER_PHONE,
-      password: staffHashed,
-      branchId: branch.id,
-    },
+    update: {},
+    create: { name: 'Seed Seller', phone: SELLER_PHONE, branchId: branch.id },
   });
 
   console.log('Seeded:');
-  console.log('  Super Admin:', SUPER_ADMIN_PHONE, '(OTP 1111 in dev)');
-  console.log('  Store Owner:', STORE_OWNER_PHONE, '(OTP 1111 in dev)');
-  console.log('  Seller (Staff):', SELLER_PHONE, '(OTP 1111 in dev)');
+  console.log('  Super Admin :', SUPER_ADMIN_PHONE, '→ OTP login (dev OTP: 1111)');
+  console.log('  Store Owner :', STORE_OWNER_PHONE, '→ OTP login (dev OTP: 1111)');
+  console.log('    Store     :', partner.businessName, `(id: ${partner.id})`);
+  console.log('    Branch    :', branch.branchName, `(id: ${branch.id})`);
+  console.log('  Seller      :', SELLER_PHONE, '→ OTP login (dev OTP: 1111)');
 }
 
 main()

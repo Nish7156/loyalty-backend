@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CreatePartnerDto {
   @ApiProperty()
@@ -12,8 +12,8 @@ export class CreatePartnerDto {
   @IsNotEmpty()
   industryType: string;
 
-  @ApiPropertyOptional({ description: 'Defaults to current user when omitted' })
-  @IsOptional()
+  @ApiProperty({ example: '+15550001234', description: 'Phone number for the partner owner account' })
   @IsString()
-  ownerId?: string;
+  @IsNotEmpty()
+  ownerPhone: string;
 }

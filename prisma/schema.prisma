@@ -60,7 +60,7 @@ model Staff {
   id       String   @id @default(uuid())
   name     String
   phone    String
-  password String
+  password String?
   branchId String
   branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   activities Activity[]
