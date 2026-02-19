@@ -57,6 +57,15 @@ export class AuthService {
   }
 
   async loginWithOtp(phone: string, otp: string) {
+    // Hardcoded dev OTP: 1111 always accepted for any registered phone
+    if (otp === DEV_OTP) {
+      const user = await this.prisma.user.findFirst({ where: { phone } });
+      if (user) return this.loginUserByPhone(phone);
+      const staff = await this.prisma.staff.findFirst({ where: { phone } });
+      if (staff) return this.loginStaffByPhone(phone);
+      throw new UnauthorizedException('Invalid phone or OTP');
+    }
+
     const record = getOtp(phone);
     if (!record || record.code !== otp) {
       throw new UnauthorizedException('Invalid or expired OTP');
