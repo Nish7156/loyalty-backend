@@ -82,7 +82,6 @@ model Streak {
   partnerId        String
   currentCount     Int       @default(0)
   lastActivityAt   DateTime?
-  periodStartedAt  DateTime? // first purchase in current reward window
   customer         Customer  @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
   partner          Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   @@unique([customerId, partnerId])

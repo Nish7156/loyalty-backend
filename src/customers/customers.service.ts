@@ -114,7 +114,7 @@ export class CustomersService {
         ...store,
         lastVisitAt: store.lastVisitAt,
         streakCurrentCount: streak?.currentCount,
-        streakPeriodStartedAt: streak?.periodStartedAt ?? null,
+        streakLastActivityAt: streak?.lastActivityAt ?? null,
       };
     });
 

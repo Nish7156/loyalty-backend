@@ -155,12 +155,12 @@ export class ActivityService {
         },
       });
 
-      const periodEnd = existing?.periodStartedAt
-        ? new Date(existing.periodStartedAt.getTime() + windowDays * 24 * 60 * 60 * 1000)
+      const periodEnd = existing?.lastActivityAt
+        ? new Date(existing.lastActivityAt.getTime() + windowDays * 24 * 60 * 60 * 1000)
         : null;
       const periodExpired = periodEnd ? serverNow > periodEnd : true;
 
-      let streak: { id: string; currentCount: number; periodStartedAt: Date | null };
+      let streak: { id: string; currentCount: number; lastActivityAt: Date | null };
       if (!existing) {
         streak = await tx.streak.create({
           data: {
@@ -168,13 +168,12 @@ export class ActivityService {
             partnerId: activity.branch.partnerId,
             currentCount: 1,
             lastActivityAt: serverNow,
-            periodStartedAt: serverNow,
           },
         });
       } else if (periodExpired) {
         streak = await tx.streak.update({
           where: { id: existing.id },
-          data: { currentCount: 1, lastActivityAt: serverNow, periodStartedAt: serverNow },
+          data: { currentCount: 1, lastActivityAt: serverNow },
         });
       } else {
         streak = await tx.streak.update({
@@ -197,7 +196,7 @@ export class ActivityService {
         });
         await tx.streak.update({
           where: { id: streak.id },
-          data: { currentCount: 0, periodStartedAt: serverNow },
+          data: { currentCount: 0, lastActivityAt: serverNow },
         });
       }
 
