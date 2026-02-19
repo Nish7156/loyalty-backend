@@ -143,7 +143,7 @@ export class ActivityService {
       let reward: { id: string; customerId: string; partnerId: string; status: string; expiryDate: Date | null; createdAt: Date } | null = null;
       if (streak.currentCount >= threshold) {
         const expiry = new Date();
-        expiry.setMonth(expiry.getMonth() + 1);
+        expiry.setDate(expiry.getDate() + 30);
         reward = await tx.reward.create({
           data: {
             customerId: activity.customerId,

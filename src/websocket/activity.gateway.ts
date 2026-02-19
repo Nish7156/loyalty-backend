@@ -41,4 +41,8 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
   emitNewCheckInRequest(branchId: string, payload: unknown): void {
     this.server.to(this.getRoomName(branchId)).emit('new_checkin_request', payload);
   }
+
+  emitCheckinUpdated(branchId: string, payload: { id: string; status: string }): void {
+    this.server.to(this.getRoomName(branchId)).emit('checkin_updated', payload);
+  }
 }

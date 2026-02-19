@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Customer, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { isOtpValid } from './dto/register.dto';
 
 @Injectable()
 export class CustomersService {
@@ -47,5 +48,17 @@ export class CustomersService {
     });
     if (!customer) throw new NotFoundException('Customer not found');
     return customer;
+  }
+
+  async registerAtBranch(branchId: string, phoneNumber: string, otp: string): Promise<Customer> {
+    if (!isOtpValid(otp)) {
+      throw new BadRequestException('Invalid OTP');
+    }
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      include: { partner: true },
+    });
+    if (!branch) throw new NotFoundException('Branch not found');
+    return this.findOrCreate(phoneNumber);
   }
 }

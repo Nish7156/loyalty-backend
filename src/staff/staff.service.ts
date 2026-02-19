@@ -1,15 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Staff, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 
+type UserWithPartners = { id: string; role: string; ownedPartners: { id: string }[] };
+
 @Injectable()
 export class StaffService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateStaffDto): Promise<Omit<Staff, 'password'>> {
+  async create(dto: CreateStaffDto, user?: UserWithPartners): Promise<Omit<Staff, 'password'>> {
+    if (user) {
+      const branch = await this.prisma.branch.findUnique({
+        where: { id: dto.branchId },
+        include: { partner: true },
+      });
+      if (!branch) throw new NotFoundException('Branch not found');
+      const isSuperAdmin = user.role === 'SUPER_ADMIN';
+      const isOwner = user.ownedPartners?.some((p) => p.id === branch.partnerId);
+      if (!isSuperAdmin && !isOwner) {
+        throw new ForbiddenException('Not allowed to create staff for this branch');
+      }
+    }
     const hashed = await bcrypt.hash(dto.password, 10);
     const staff = await this.prisma.staff.create({
       data: {

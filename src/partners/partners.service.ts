@@ -8,12 +8,12 @@ import { UpdatePartnerDto } from './dto/update-partner.dto';
 export class PartnersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreatePartnerDto): Promise<Partner> {
+  async create(dto: CreatePartnerDto, ownerId: string): Promise<Partner> {
     return this.prisma.partner.create({
       data: {
         businessName: dto.businessName,
         industryType: dto.industryType,
-        ownerId: dto.ownerId,
+        ownerId: dto.ownerId ?? ownerId,
       },
     });
   }

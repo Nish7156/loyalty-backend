@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
@@ -10,8 +11,10 @@ export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post()
-  create(@Body() dto: CreateStaffDto) {
-    return this.staffService.create(dto);
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
+  create(@Body() dto: CreateStaffDto, @Req() req: { user: { id: string; role: string; ownedPartners: { id: string }[] } }) {
+    return this.staffService.create(dto, req.user);
   }
 
   @Get()

@@ -6,37 +6,81 @@ Swagger UI: `/api/docs`
 
 ---
 
+## Seed: Super Admin
+
+After `npm run seed`:
+
+| Role         | Phone        | OTP (dev) |
+|--------------|--------------|-----------|
+| Super Admin  | `+15550000001` | 1111    |
+| Store Owner  | `+15550000002` | 1111    |
+| Seller (Staff) | `+15550000003` | 1111  |
+
+Flow: **POST /auth/send-otp** with phone → then **POST /auth/login** with phone + OTP. One login for Admin, Store Owner, and Staff; response indicates role and frontend redirects.
+
+---
+
 ## Auth
 
-### POST /auth/staff/login
+All logins use **phone + OTP** (one page, one flow). Backend looks up phone in User (platform) or Staff; sends OTP; login returns either `user` or `staff` and JWT.
 
-Staff login. Returns JWT for protected routes.
+### POST /auth/send-otp
+
+Send OTP to the given phone. Phone must be registered (platform User or Staff).
+
+**Request body**
+
+```json
+{ "phone": "+15550000001" }
+```
+
+| Field | Type   | Required |
+|-------|--------|----------|
+| phone | string | yes      |
+
+**Response**
+
+```json
+{ "success": true }
+```
+
+In development, response may include `"otp": "1111"` for testing.
+
+---
+
+### POST /auth/login
+
+Verify OTP and return JWT. Returns either platform **user** or **staff** depending on who owns the phone.
 
 **Request body**
 
 ```json
 {
-  "phone": "+15551234567",
-  "password": "secret123"
+  "phone": "+15550000001",
+  "otp": "1111"
 }
 ```
 
-| Field     | Type   | Required | Description        |
-|----------|--------|----------|--------------------|
-| phone    | string | yes      | Staff phone        |
-| password | string | yes      | Min length 6       |
+| Field | Type   | Required |
+|-------|--------|----------|
+| phone | string | yes      |
+| otp   | string | yes      |
 
-**Response**
+**Response (platform user – Admin or Store Owner)**
 
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "staff": {
-    "id": "uuid",
-    "name": "John",
-    "phone": "+15551234567",
-    "branchId": "uuid"
-  }
+  "user": { "id": "uuid", "phone": "+15550000001", "role": "SUPER_ADMIN" }
+}
+```
+
+**Response (staff – Seller)**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "staff": { "id": "uuid", "name": "John", "phone": "+15551234567", "branchId": "uuid" }
 }
 ```
 
@@ -45,6 +89,8 @@ Staff login. Returns JWT for protected routes.
 ## Partners
 
 ### POST /partners
+
+**Requires Bearer token** (platform user: Super Admin or Partner Owner). Registers a new business. If `ownerId` is omitted, the current user is set as owner.
 
 **Request body**
 
@@ -56,11 +102,11 @@ Staff login. Returns JWT for protected routes.
 }
 ```
 
-| Field        | Type   | Required |
-|-------------|--------|----------|
-| businessName| string | yes      |
-| industryType| string | yes      |
-| ownerId     | string | yes      |
+| Field        | Type   | Required | Description                          |
+|-------------|--------|----------|--------------------------------------|
+| businessName| string | yes      |                                      |
+| industryType| string | yes      | e.g. F&B, Salon, Fitness             |
+| ownerId     | string | no       | Defaults to current user if omitted  |
 
 **Response:** Partner object (id, businessName, industryType, ownerId)
 
@@ -163,6 +209,8 @@ Staff login. Returns JWT for protected routes.
 
 ### POST /staff
 
+**Requires Bearer token** (platform user: Super Admin or Partner Owner of the branch’s partner). Creates a staff account for a branch.
+
 **Request body**
 
 ```json
@@ -220,6 +268,30 @@ Staff login. Returns JWT for protected routes.
 ---
 
 ## Customers
+
+### POST /customers/register
+
+Register a customer at a store (branch) using **phone + OTP**. For now OTP is **dummy: `1111`**. User scans (e.g. QR at branch), enters phone, enters OTP; staff can also submit on behalf of customer.
+
+**Request body**
+
+```json
+{
+  "branchId": "branch-uuid",
+  "phoneNumber": "+15551234567",
+  "otp": "1111"
+}
+```
+
+| Field       | Type   | Required | Description        |
+|------------|--------|----------|--------------------|
+| branchId   | string | yes (UUID)| Branch (store)    |
+| phoneNumber| string | yes      | Customer phone     |
+| otp        | string | yes      | Dummy OTP: `1111`  |
+
+**Response:** Customer object (phoneNumber). Creates customer if not exists.
+
+---
 
 ### POST /customers
 
@@ -378,4 +450,6 @@ Approve or reject a PENDING check-in. **Requires Bearer token (Staff JWT).**
 - **Namespace:** default (`/`)
 - **Connect with branch:** `?branchId=<branch-uuid>` to join room `branch_{branchId}`
 - **Event to join room:** `join_branch` with payload `{ "branchId": "uuid" }`
-- **Server event:** `new_checkin_request` — emitted to room when POST /activity/check-in succeeds; payload is the created activity object
+- **Server events:**
+  - `new_checkin_request` — emitted to room when POST /activity/check-in succeeds; payload is the created activity object
+  - `checkin_updated` — emitted to room when PATCH /activity/:id (approve/reject) succeeds; payload is `{ id, status }` so sellers can remove the item from pending list

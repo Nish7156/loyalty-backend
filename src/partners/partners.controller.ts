@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { User } from '@prisma/client';
+import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
 import { PartnersService } from './partners.service';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
@@ -10,8 +12,10 @@ export class PartnersController {
   constructor(private readonly partnersService: PartnersService) {}
 
   @Post()
-  create(@Body() dto: CreatePartnerDto) {
-    return this.partnersService.create(dto);
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
+  create(@Body() dto: CreatePartnerDto, @Req() req: { user: User }) {
+    return this.partnersService.create(dto, req.user.id);
   }
 
   @Get()

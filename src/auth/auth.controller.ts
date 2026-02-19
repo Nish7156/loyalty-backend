@@ -1,15 +1,21 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LoginStaffDto } from './dto/login-staff.dto';
+import { LoginWithOtpDto } from './dto/login-with-otp.dto';
+import { SendOtpDto } from './dto/send-otp.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('staff/login')
-  async staffLogin(@Body() dto: LoginStaffDto) {
-    return this.authService.loginStaff(dto.phone, dto.password);
+  @Post('send-otp')
+  async sendOtp(@Body() dto: SendOtpDto) {
+    return this.authService.sendOtp(dto.phone);
+  }
+
+  @Post('login')
+  async login(@Body() dto: LoginWithOtpDto) {
+    return this.authService.loginWithOtp(dto.phone, dto.otp);
   }
 }
