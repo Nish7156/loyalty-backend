@@ -53,23 +53,25 @@ export class ActivityService {
 
     const customer = await this.customersService.findOrCreate(dto.phoneNumber);
     const partnerId = branch.partnerId;
-    const cooldownHours = this.getCooldownHours(branch);
+    const cooldownHours = Math.max(0, Math.min(48, this.getCooldownHours(branch)));
 
-    const since = new Date();
-    since.setHours(since.getHours() - cooldownHours);
-    const recentApproved = await this.prisma.activity.findFirst({
-      where: {
-        customerId: customer.phoneNumber,
-        branch: { partnerId },
-        status: ActivityStatus.APPROVED,
-        createdAt: { gte: since },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (recentApproved) {
-      throw new BadRequestException(
-        `Cooldown active. Next check-in allowed after ${cooldownHours} hours from last approved visit.`,
-      );
+    if (cooldownHours > 0) {
+      const since = new Date();
+      since.setHours(since.getHours() - cooldownHours);
+      const recentApproved = await this.prisma.activity.findFirst({
+        where: {
+          customerId: customer.phoneNumber,
+          branch: { partnerId },
+          status: ActivityStatus.APPROVED,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (recentApproved) {
+        throw new BadRequestException(
+          `Cooldown active. Next check-in allowed after ${cooldownHours} hours from last approved visit.`,
+        );
+      }
     }
 
     const requestLocation = dto.requestLocation ?? null;
