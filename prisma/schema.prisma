@@ -6,3 +6,117 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum PlatformRole {
+  SUPER_ADMIN
+  PARTNER_OWNER
+}
+
+enum ActivityStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RewardStatus {
+  ACTIVE
+  REDEEMED
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String?   @unique
+  password       String?
+  role           PlatformRole
+  ownedPartners  Partner[] @relation("PartnerOwner")
+}
+
+model Partner {
+  id           String   @id @default(uuid())
+  businessName String
+  industryType String
+  ownerId      String
+  owner        User     @relation("PartnerOwner", fields: [ownerId], references: [id])
+  branches     Branch[]
+  streaks      Streak[]
+  rewards      Reward[]
+  @@index([ownerId])
+}
+
+model Branch {
+  id         String   @id @default(uuid())
+  branchName String
+  partnerId  String
+  partner    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  settings   Json?    // e.g. { "streakThreshold": 20, "cooldownHours": 18 }
+  location   Json?    // { "lat": number, "lng": number } for geofencing
+  staff      Staff[]
+  activities Activity[]
+  @@index([partnerId])
+}
+
+model Staff {
+  id       String   @id @default(uuid())
+  name     String
+  phone    String
+  password String
+  branchId String
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  activities Activity[]
+  @@unique([branchId, phone])
+  @@index([branchId])
+  @@index([phone])
+}
+
+model Customer {
+  phoneNumber String    @id
+  streaks     Streak[]
+  activities  Activity[]
+  rewards     Reward[]
+}
+
+model Streak {
+  id             String    @id @default(uuid())
+  customerId     String
+  partnerId      String
+  currentCount   Int       @default(0)
+  lastActivityAt DateTime?
+  customer       Customer  @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+  partner        Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  @@unique([customerId, partnerId])
+  @@index([customerId])
+  @@index([partnerId])
+}
+
+model Activity {
+  id               String         @id @default(uuid())
+  customerId       String
+  branchId         String
+  staffId          String?
+  status           ActivityStatus @default(PENDING)
+  value            Decimal?       @db.Decimal(10, 2)
+  requestLocation  Json?          // { "lat": number, "lng": number }
+  createdAt        DateTime       @default(now())
+  customer         Customer       @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+  branch           Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff            Staff?         @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  @@index([customerId])
+  @@index([branchId])
+  @@index([staffId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model Reward {
+  id         String      @id @default(uuid())
+  customerId String
+  partnerId  String
+  status     RewardStatus @default(ACTIVE)
+  expiryDate DateTime?
+  createdAt  DateTime    @default(now())
+  customer   Customer    @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+  partner    Partner     @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  @@index([customerId])
+  @@index([partnerId])
+  @@index([status])
+}

@@ -1,0 +1,73 @@
+erDiagram
+  User ||--o{ Partner : "owns"
+  Partner ||--o{ Branch : "has"
+  Partner ||--o{ Streak : "has"
+  Partner ||--o{ Reward : "has"
+  Branch ||--o{ Staff : "has"
+  Branch ||--o{ Activity : "has"
+  Staff ||--o{ Activity : "approves"
+  Customer ||--o{ Streak : "has"
+  Customer ||--o{ Activity : "has"
+  Customer ||--o{ Reward : "has"
+
+  User {
+    string id PK
+    string email UK
+    string password
+    enum role "SUPER_ADMIN,PARTNER_OWNER"
+  }
+
+  Partner {
+    string id PK
+    string businessName
+    string industryType
+    string ownerId FK
+  }
+
+  Branch {
+    string id PK
+    string branchName
+    string partnerId FK
+    json settings
+    json location
+  }
+
+  Staff {
+    string id PK
+    string name
+    string phone
+    string password
+    string branchId FK
+  }
+
+  Customer {
+    string phoneNumber PK
+  }
+
+  Streak {
+    string id PK
+    string customerId FK
+    string partnerId FK
+    int currentCount
+    datetime lastActivityAt
+  }
+
+  Activity {
+    string id PK
+    string customerId FK
+    string branchId FK
+    string staffId FK
+    enum status "PENDING,APPROVED,REJECTED"
+    decimal value
+    json requestLocation
+    datetime createdAt
+  }
+
+  Reward {
+    string id PK
+    string customerId FK
+    string partnerId FK
+    enum status "ACTIVE,REDEEMED"
+    datetime expiryDate
+    datetime createdAt
+  }

@@ -2,9 +2,27 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { PartnersModule } from './partners/partners.module';
+import { BranchesModule } from './branches/branches.module';
+import { StaffModule } from './staff/staff.module';
+import { CustomersModule } from './customers/customers.module';
+import { ActivityModule } from './activity/activity.module';
+import { RewardsModule } from './rewards/rewards.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    PartnersModule,
+    BranchesModule,
+    StaffModule,
+    CustomersModule,
+    ActivityModule,
+    RewardsModule,
+    WebsocketModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
