@@ -66,13 +66,31 @@ export class CustomersService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const DEFAULT_REWARD_WINDOW_DAYS = 30;
+    const DEFAULT_REWARD_DESCRIPTION = 'Free reward';
     const byBranch = new Map<
       string,
-      { branchId: string; branchName: string; partnerId: string; partnerName: string; visitCount: number; lastVisitAt: Date }
+      {
+        branchId: string;
+        branchName: string;
+        partnerId: string;
+        partnerName: string;
+        visitCount: number;
+        lastVisitAt: Date;
+        rewardThreshold?: number;
+        rewardWindowDays?: number;
+        rewardDescription?: string;
+      }
     >();
     for (const a of approvedActivities) {
       const key = a.branchId;
       if (!byBranch.has(key)) {
+        const settings = (a.branch.settings as Record<string, unknown>) ?? {};
+        const rewardThreshold = typeof settings.streakThreshold === 'number' ? settings.streakThreshold : undefined;
+        const rewardWindowDays =
+          typeof settings.rewardWindowDays === 'number' ? settings.rewardWindowDays : DEFAULT_REWARD_WINDOW_DAYS;
+        const rewardDescription =
+          typeof settings.rewardDescription === 'string' ? settings.rewardDescription : DEFAULT_REWARD_DESCRIPTION;
         byBranch.set(key, {
           branchId: a.branch.id,
           branchName: a.branch.branchName,
@@ -80,13 +98,25 @@ export class CustomersService {
           partnerName: a.branch.partner.businessName,
           visitCount: 0,
           lastVisitAt: a.createdAt,
+          rewardThreshold,
+          rewardWindowDays,
+          rewardDescription,
         });
       }
       const row = byBranch.get(key)!;
       row.visitCount += 1;
       if (a.createdAt > row.lastVisitAt) row.lastVisitAt = a.createdAt;
     }
-    const storesVisited = Array.from(byBranch.values());
+    const storesWithRule = Array.from(byBranch.values());
+    const storesVisited = storesWithRule.map((store) => {
+      const streak = customer.streaks.find((s) => s.partnerId === store.partnerId);
+      return {
+        ...store,
+        lastVisitAt: store.lastVisitAt,
+        streakCurrentCount: streak?.currentCount,
+        streakPeriodStartedAt: streak?.periodStartedAt ?? null,
+      };
+    });
 
     return {
       customer: {

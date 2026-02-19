@@ -8,6 +8,13 @@ import { CheckInDto } from './dto/check-in.dto';
 
 const COOLDOWN_KEY = 'cooldownHours';
 const STREAK_THRESHOLD_KEY = 'streakThreshold';
+const REWARD_WINDOW_DAYS_KEY = 'rewardWindowDays';
+const REWARD_DESCRIPTION_KEY = 'rewardDescription';
+
+const DEFAULT_REWARD_WINDOW_DAYS = 30;
+const DEFAULT_REWARD_DESCRIPTION = 'Free reward';
+
+/** All date logic uses server/DB timestamps only. Never use client-supplied dates (user can change device time). */
 
 @Injectable()
 export class ActivityService {
@@ -22,8 +29,18 @@ export class ActivityService {
   }
 
   private getStreakThreshold(branch: { settings?: Prisma.JsonValue }): number {
-    const s = branch.settings as Record<string, number> | null;
+    const s = branch.settings as Record<string, unknown> | null;
     return (s && typeof s[STREAK_THRESHOLD_KEY] === 'number') ? s[STREAK_THRESHOLD_KEY] : 10;
+  }
+
+  private getRewardWindowDays(branch: { settings?: Prisma.JsonValue }): number {
+    const s = branch.settings as Record<string, unknown> | null;
+    return (s && typeof s[REWARD_WINDOW_DAYS_KEY] === 'number') ? s[REWARD_WINDOW_DAYS_KEY] : DEFAULT_REWARD_WINDOW_DAYS;
+  }
+
+  private getRewardDescription(branch: { settings?: Prisma.JsonValue }): string {
+    const s = branch.settings as Record<string, unknown> | null;
+    return (s && typeof s[REWARD_DESCRIPTION_KEY] === 'string') ? s[REWARD_DESCRIPTION_KEY] : DEFAULT_REWARD_DESCRIPTION;
   }
 
   private isDistantScan(
@@ -83,7 +100,6 @@ export class ActivityService {
         status: ActivityStatus.PENDING,
         value: dto.value != null ? new Decimal(dto.value) : null,
         requestLocation: requestLocation ?? undefined,
-        createdAt: new Date(),
       },
       include: {
         customer: true,
@@ -116,6 +132,8 @@ export class ActivityService {
     }
 
     const threshold = this.getStreakThreshold(activity.branch);
+    const windowDays = this.getRewardWindowDays(activity.branch);
+    const serverNow = new Date();
     const result = await this.prisma.$transaction(async (tx) => {
       const updateData: { status: ActivityStatus; staffId: string; value?: Decimal } = {
         status: ActivityStatus.APPROVED,
@@ -128,28 +146,46 @@ export class ActivityService {
         include: { customer: true, branch: true },
       });
 
-      const streak = await tx.streak.upsert({
+      const existing = await tx.streak.findUnique({
         where: {
           customerId_partnerId: {
             customerId: activity.customerId,
             partnerId: activity.branch.partnerId,
           },
         },
-        create: {
-          customerId: activity.customerId,
-          partnerId: activity.branch.partnerId,
-          currentCount: 1,
-          lastActivityAt: new Date(),
-        },
-        update: {
-          currentCount: { increment: 1 },
-          lastActivityAt: new Date(),
-        },
       });
+
+      const periodEnd = existing?.periodStartedAt
+        ? new Date(existing.periodStartedAt.getTime() + windowDays * 24 * 60 * 60 * 1000)
+        : null;
+      const periodExpired = periodEnd ? serverNow > periodEnd : true;
+
+      let streak: { id: string; currentCount: number; periodStartedAt: Date | null };
+      if (!existing) {
+        streak = await tx.streak.create({
+          data: {
+            customerId: activity.customerId,
+            partnerId: activity.branch.partnerId,
+            currentCount: 1,
+            lastActivityAt: serverNow,
+            periodStartedAt: serverNow,
+          },
+        });
+      } else if (periodExpired) {
+        streak = await tx.streak.update({
+          where: { id: existing.id },
+          data: { currentCount: 1, lastActivityAt: serverNow, periodStartedAt: serverNow },
+        });
+      } else {
+        streak = await tx.streak.update({
+          where: { id: existing.id },
+          data: { currentCount: { increment: 1 }, lastActivityAt: serverNow },
+        });
+      }
 
       let reward: { id: string; customerId: string; partnerId: string; status: string; expiryDate: Date | null; createdAt: Date } | null = null;
       if (streak.currentCount >= threshold) {
-        const expiry = new Date();
+        const expiry = new Date(serverNow.getTime());
         expiry.setDate(expiry.getDate() + 30);
         reward = await tx.reward.create({
           data: {
@@ -161,7 +197,7 @@ export class ActivityService {
         });
         await tx.streak.update({
           where: { id: streak.id },
-          data: { currentCount: 0 },
+          data: { currentCount: 0, periodStartedAt: serverNow },
         });
       }
 

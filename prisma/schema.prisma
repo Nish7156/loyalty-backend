@@ -77,13 +77,14 @@ model Customer {
 }
 
 model Streak {
-  id             String    @id @default(uuid())
-  customerId     String
-  partnerId      String
-  currentCount   Int       @default(0)
-  lastActivityAt DateTime?
-  customer       Customer  @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
-  partner        Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  id               String    @id @default(uuid())
+  customerId       String
+  partnerId        String
+  currentCount     Int       @default(0)
+  lastActivityAt   DateTime?
+  periodStartedAt  DateTime? // first purchase in current reward window
+  customer         Customer  @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+  partner          Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   @@unique([customerId, partnerId])
   @@index([customerId])
   @@index([partnerId])
