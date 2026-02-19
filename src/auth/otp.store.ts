@@ -1,6 +1,6 @@
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export type OtpType = 'platform' | 'staff';
+export type OtpType = 'platform' | 'staff' | 'customer';
 
 export interface OtpRecord {
   code: string;

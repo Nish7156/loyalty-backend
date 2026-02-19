@@ -18,6 +18,11 @@ export interface JwtUserPayload {
   type: 'user';
 }
 
+export interface JwtCustomerPayload {
+  phone: string;
+  type: 'customer';
+}
+
 const DEV_OTP = '1111';
 
 function generateOtp(): string {
@@ -53,7 +58,11 @@ export class AuthService {
       return res;
     }
 
-    throw new BadRequestException('Phone not registered');
+    const code = generateOtp();
+    setOtp(phone, code, 'customer');
+    const res: { success: true; otp?: string } = { success: true };
+    if (process.env.NODE_ENV !== 'production') res.otp = code;
+    return res;
   }
 
   async loginWithOtp(phone: string, otp: string) {
@@ -78,7 +87,44 @@ export class AuthService {
     if (record.type === 'platform') {
       return this.loginUserByPhone(phone);
     }
+    if (record.type === 'customer') {
+      return this.loginCustomerByPhone(phone);
+    }
     return this.loginStaffByPhone(phone);
+  }
+
+  async loginCustomer(phone: string, otp: string) {
+    if (otp === DEV_OTP) {
+      return this.loginCustomerByPhone(phone);
+    }
+    const record = getOtp(phone);
+    if (!record || record.code !== otp) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+    if (new Date() > record.expiresAt) {
+      getAndClearOtp(phone);
+      throw new UnauthorizedException('OTP expired');
+    }
+    getAndClearOtp(phone);
+    if (record.type !== 'customer') {
+      throw new UnauthorizedException('Invalid OTP for customer');
+    }
+    return this.loginCustomerByPhone(phone);
+  }
+
+  async issueCustomerToken(phone: string): Promise<{ access_token: string; customer: { phone: string } }> {
+    return this.loginCustomerByPhone(phone);
+  }
+
+  private async loginCustomerByPhone(phone: string) {
+    await this.prisma.customer.upsert({
+      where: { phoneNumber: phone },
+      create: { phoneNumber: phone },
+      update: {},
+    });
+    const payload: JwtCustomerPayload = { phone, type: 'customer' };
+    const token = this.jwtService.sign(payload, { expiresIn: '365d' });
+    return { access_token: token, customer: { phone } };
   }
 
   private async loginUserByPhone(phone: string) {

@@ -27,11 +27,14 @@ export class RewardsService {
     });
   }
 
-  async redeem(id: string): Promise<Reward> {
+  async redeem(id: string, customerPhone?: string): Promise<Reward> {
     const reward = await this.prisma.reward.findUnique({ where: { id } });
     if (!reward) throw new NotFoundException('Reward not found');
     if (reward.status === 'REDEEMED') {
       throw new NotFoundException('Reward already redeemed');
+    }
+    if (customerPhone != null && reward.customerId !== customerPhone) {
+      throw new NotFoundException('Reward not found');
     }
     return this.prisma.reward.update({
       where: { id },

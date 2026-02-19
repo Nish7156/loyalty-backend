@@ -18,4 +18,9 @@ export class AuthController {
   async login(@Body() dto: LoginWithOtpDto) {
     return this.authService.loginWithOtp(dto.phone, dto.otp);
   }
+
+  @Post('customer-login')
+  async customerLogin(@Body() dto: LoginWithOtpDto) {
+    return this.authService.loginCustomer(dto.phone, dto.otp);
+  }
 }

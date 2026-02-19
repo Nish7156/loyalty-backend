@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtCustomerAuthGuard } from '../auth/guards/jwt-customer.guard';
 import { RewardsService } from './rewards.service';
 
 @ApiTags('rewards')
@@ -23,7 +24,8 @@ export class RewardsController {
   }
 
   @Patch(':id/redeem')
-  redeem(@Param('id') id: string) {
-    return this.rewardsService.redeem(id);
+  @UseGuards(JwtCustomerAuthGuard)
+  redeem(@Param('id') id: string, @Req() req: { user: { phone: string } }) {
+    return this.rewardsService.redeem(id, req.user.phone);
   }
 }
