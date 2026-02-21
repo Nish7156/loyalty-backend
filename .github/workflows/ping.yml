@@ -21,4 +21,4 @@ jobs:
           curl -sf --max-time 30 "$URL" && echo " OK" || exit 1
         env:
           # Override with PING_URL secret in Settings → Secrets → Actions if your API URL is different
-          PING_URL: ${{ secrets.PING_URL || 'https://loyalty-backend.onrender.com' }}
+          PING_URL: ${{ secrets.PING_URL || 'https://loyalty-backend-lvqj.onrender.com' }}
