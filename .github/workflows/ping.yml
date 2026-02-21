@@ -1,0 +1,24 @@
+name: Keep API alive
+
+on:
+  schedule:
+    # Run every 11 minutes
+    - cron: '*/11 * * * *'
+  workflow_dispatch: # Allow manual run
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /ping
+        run: |
+          if [ -z "$PING_URL" ]; then
+            echo "Skipping: Set PING_URL secret or edit this workflow with your API base URL"
+            exit 0
+          fi
+          URL="${PING_URL%/}/ping"
+          echo "Pinging $URL"
+          curl -sf --max-time 30 "$URL" && echo " OK" || exit 1
+        env:
+          # Override with PING_URL secret in Settings → Secrets → Actions if your API URL is different
+          PING_URL: ${{ secrets.PING_URL || 'https://loyalty-backend.onrender.com' }}
