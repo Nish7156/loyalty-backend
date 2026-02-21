@@ -39,7 +39,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async sendOtp(phone: string): Promise<{ success: true; otp?: string }> {
+  async sendOtp(phone: string, mpin?: string): Promise<{ success: true; otp?: string }> {
     const user = await this.prisma.user.findFirst({ where: { phone } });
     if (user) {
       const code = generateOtp();
@@ -58,7 +58,7 @@ export class AuthService {
       return res;
     }
 
-    const code = generateOtp();
+    const code = mpin && /^\d{4}$/.test(mpin) ? mpin : generateOtp();
     setOtp(phone, code, 'customer');
     const res: { success: true; otp?: string } = { success: true };
     if (process.env.NODE_ENV !== 'production') res.otp = code;
