@@ -10,6 +10,7 @@ import { CustomersModule } from './customers/customers.module';
 import { ActivityModule } from './activity/activity.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { WebsocketModule } from './websocket/websocket.module';
     ActivityModule,
     RewardsModule,
     WebsocketModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService],
