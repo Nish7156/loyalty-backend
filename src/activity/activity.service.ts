@@ -6,7 +6,8 @@ import { DEFAULT_COOLDOWN_HOURS } from '../common/constants';
 import { CustomersService } from '../customers/customers.service';
 import { CheckInDto } from './dto/check-in.dto';
 
-const COOLDOWN_KEY = 'cooldownHours';
+const COOLDOWN_HOURS_KEY = 'cooldownHours';
+const COOLDOWN_MINUTES_KEY = 'cooldownMinutes';
 const STREAK_THRESHOLD_KEY = 'streakThreshold';
 const REWARD_WINDOW_DAYS_KEY = 'rewardWindowDays';
 const REWARD_DESCRIPTION_KEY = 'rewardDescription';
@@ -23,9 +24,21 @@ export class ActivityService {
     private readonly customersService: CustomersService,
   ) {}
 
-  private getCooldownHours(branch: { settings?: Prisma.JsonValue }): number {
+  /** Cooldown in minutes. Reads cooldownMinutes, else cooldownHours * 60, else default. Capped at 48h. */
+  private getCooldownMinutes(branch: { settings?: Prisma.JsonValue }): number {
     const s = branch.settings as Record<string, number> | null;
-    return (s && typeof s[COOLDOWN_KEY] === 'number') ? s[COOLDOWN_KEY] : DEFAULT_COOLDOWN_HOURS;
+    if (s && typeof s[COOLDOWN_MINUTES_KEY] === 'number')
+      return Math.max(0, Math.min(48 * 60, s[COOLDOWN_MINUTES_KEY]));
+    if (s && typeof s[COOLDOWN_HOURS_KEY] === 'number')
+      return Math.max(0, Math.min(48 * 60, s[COOLDOWN_HOURS_KEY] * 60));
+    return DEFAULT_COOLDOWN_HOURS * 60;
+  }
+
+  private formatCooldown(totalMinutes: number): string {
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return m === 0 ? `${h} h` : `${h} h ${m} min`;
   }
 
   private getStreakThreshold(branch: { settings?: Prisma.JsonValue }): number {
@@ -70,11 +83,10 @@ export class ActivityService {
 
     const customer = await this.customersService.findOrCreate(dto.phoneNumber);
     const partnerId = branch.partnerId;
-    const cooldownHours = Math.max(0, Math.min(48, this.getCooldownHours(branch)));
+    const cooldownMinutes = this.getCooldownMinutes(branch);
 
-    if (cooldownHours > 0) {
-      const since = new Date();
-      since.setHours(since.getHours() - cooldownHours);
+    if (cooldownMinutes > 0) {
+      const since = new Date(Date.now() - cooldownMinutes * 60 * 1000);
       const recentApproved = await this.prisma.activity.findFirst({
         where: {
           customerId: customer.phoneNumber,
@@ -86,19 +98,21 @@ export class ActivityService {
       });
       if (recentApproved) {
         throw new BadRequestException(
-          `Cooldown active. Next check-in allowed after ${cooldownHours} hours from last approved visit.`,
+          `Cooldown active. Next check-in allowed after ${this.formatCooldown(cooldownMinutes)} from last approved visit.`,
         );
       }
     }
 
     const requestLocation = dto.requestLocation ?? null;
     const locationFlag = this.isDistantScan(requestLocation, branch.location);
+    const customerName = typeof dto.customerName === 'string' ? dto.customerName.trim().slice(0, 200) : null;
     const activity = await this.prisma.activity.create({
       data: {
         customerId: customer.phoneNumber,
         branchId: dto.branchId,
         status: ActivityStatus.PENDING,
         value: dto.value != null ? new Decimal(dto.value) : null,
+        customerName: customerName || undefined,
         requestLocation: requestLocation ?? undefined,
       },
       include: {

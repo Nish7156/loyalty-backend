@@ -157,6 +157,7 @@ export class CustomersService {
         staffId: a.staffId,
         status: a.status,
         value: a.value != null ? Number(a.value) : null,
+        customerName: a.customerName ?? null,
         createdAt: a.createdAt,
         branch: a.branch,
         partner: a.branch.partner,

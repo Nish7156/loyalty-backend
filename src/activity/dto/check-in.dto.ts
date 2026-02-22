@@ -23,6 +23,11 @@ export class CheckInDto {
   @IsNotEmpty()
   phoneNumber: string;
 
+  @ApiPropertyOptional({ description: 'Customer name (string only)' })
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
