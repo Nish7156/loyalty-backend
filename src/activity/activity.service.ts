@@ -11,6 +11,7 @@ const COOLDOWN_MINUTES_KEY = 'cooldownMinutes';
 const STREAK_THRESHOLD_KEY = 'streakThreshold';
 const REWARD_WINDOW_DAYS_KEY = 'rewardWindowDays';
 const REWARD_DESCRIPTION_KEY = 'rewardDescription';
+const MIN_CHECK_IN_AMOUNT_KEY = 'minCheckInAmount';
 
 const DEFAULT_REWARD_WINDOW_DAYS = 30;
 const DEFAULT_REWARD_DESCRIPTION = 'Free reward';
@@ -56,6 +57,14 @@ export class ActivityService {
     return (s && typeof s[REWARD_DESCRIPTION_KEY] === 'string') ? s[REWARD_DESCRIPTION_KEY] : DEFAULT_REWARD_DESCRIPTION;
   }
 
+  /** Minimum amount (e.g. price) user can enter for check-in. Undefined means no minimum. */
+  private getMinCheckInAmount(branch: { settings?: Prisma.JsonValue }): number | undefined {
+    const s = branch.settings as Record<string, unknown> | null;
+    if (s && typeof s[MIN_CHECK_IN_AMOUNT_KEY] === 'number' && s[MIN_CHECK_IN_AMOUNT_KEY] >= 0)
+      return s[MIN_CHECK_IN_AMOUNT_KEY];
+    return undefined;
+  }
+
   private isDistantScan(
     requestLocation: { lat: number; lng: number } | null,
     branchLocation: Prisma.JsonValue,
@@ -84,6 +93,13 @@ export class ActivityService {
     const customer = await this.customersService.findOrCreate(dto.phoneNumber);
     const partnerId = branch.partnerId;
     const cooldownMinutes = this.getCooldownMinutes(branch);
+    const minAmount = this.getMinCheckInAmount(branch);
+
+    if (minAmount != null && dto.value != null && Number(dto.value) < minAmount) {
+      throw new BadRequestException(
+        `Amount must be at least ${minAmount}. This store has a minimum check-in amount.`,
+      );
+    }
 
     if (cooldownMinutes > 0) {
       const since = new Date(Date.now() - cooldownMinutes * 60 * 1000);
