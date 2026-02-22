@@ -125,7 +125,7 @@ export class AuthService {
       update: {},
     });
     const payload: JwtCustomerPayload = { phone, type: 'customer' };
-    const token = this.jwtService.sign(payload, { expiresIn: '365d' });
+    const token = this.jwtService.sign(payload, { expiresIn: '3650d' });
     return { access_token: token, customer: { phone } };
   }
 
@@ -142,7 +142,7 @@ export class AuthService {
       type: 'user',
     };
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.jwtService.sign(payload, { expiresIn: '90d' }),
       user: { id: user.id, phone: user.phone, role: user.role },
     };
   }
@@ -160,7 +160,7 @@ export class AuthService {
       type: 'staff',
     };
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.jwtService.sign(payload, { expiresIn: '90d' }),
       staff: { id: staff.id, name: staff.name, phone: staff.phone, branchId: staff.branchId },
     };
   }
