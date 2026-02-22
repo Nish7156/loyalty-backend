@@ -9,7 +9,7 @@ export class RegisterCustomerDto {
   @IsNotEmpty()
   branchId: string;
 
-  @ApiProperty({ example: '+15551234567' })
+  @ApiProperty({ example: '+919876543210' })
   @IsString()
   @IsNotEmpty()
   phoneNumber: string;

@@ -2,9 +2,9 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const SUPER_ADMIN_PHONE = '+1111111111';
-const STORE_OWNER_PHONE = '+2222222222';
-const SELLER_PHONE = '+3333333333';
+const SUPER_ADMIN_PHONE = '1111111111';
+const STORE_OWNER_PHONE = '2222222222';
+const SELLER_PHONE = '3333333333';
 
 async function main() {
   // Super Admin — login via OTP only

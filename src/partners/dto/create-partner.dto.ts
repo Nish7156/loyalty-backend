@@ -12,7 +12,7 @@ export class CreatePartnerDto {
   @IsNotEmpty()
   industryType: string;
 
-  @ApiProperty({ example: '+15550001234', description: 'Phone number for the partner owner account' })
+  @ApiProperty({ example: '+919876543210', description: 'Phone number for the partner owner account (Indian format)' })
   @IsString()
   @IsNotEmpty()
   ownerPhone: string;
