@@ -23,13 +23,20 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
     return `customer_${customerId}`;
   }
 
-  handleConnection(client: { id: string; handshake: { query?: Record<string, string> }; join: (room: string) => void }) {
+  private normalizeQueryParam(value: unknown): string | null {
+    if (value == null) return null;
+    const s = Array.isArray(value) ? value[0] : value;
+    const str = typeof s === 'string' ? s.trim() : String(s).trim();
+    return str || null;
+  }
+
+  handleConnection(client: { id: string; handshake: { query?: Record<string, unknown> }; join: (room: string) => void }) {
     const query = client.handshake?.query ?? {};
-    const branchId = query.branchId as string | undefined;
+    const branchId = this.normalizeQueryParam(query.branchId);
     if (branchId) {
       client.join(this.getRoomName(branchId));
     }
-    const customerId = query.customerId as string | undefined;
+    const customerId = this.normalizeQueryParam(query.customerId);
     if (customerId) {
       client.join(this.getCustomerRoomName(customerId));
     }
@@ -56,6 +63,9 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   emitCheckinUpdatedToCustomer(customerId: string, payload: { id: string; status: string }): void {
-    this.server.to(this.getCustomerRoomName(customerId)).emit('checkin_updated', payload);
+    const normalized = typeof customerId === 'string' ? customerId.trim() : String(customerId).trim();
+    if (normalized) {
+      this.server.to(this.getCustomerRoomName(normalized)).emit('checkin_updated', payload);
+    }
   }
 }
