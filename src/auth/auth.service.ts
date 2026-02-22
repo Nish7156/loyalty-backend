@@ -32,6 +32,11 @@ function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+/** Random 4-digit MPIN for end-user (customer) verification only. */
+function generateCustomerMpin(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -58,10 +63,10 @@ export class AuthService {
       return res;
     }
 
-    const code = mpin && /^\d{4}$/.test(mpin) ? mpin : generateOtp();
+    const code = generateCustomerMpin();
     setOtp(phone, code, 'customer');
     const res: { success: true; otp?: string } = { success: true };
-    if (process.env.NODE_ENV !== 'production') res.otp = code;
+    res.otp = code;
     return res;
   }
 
@@ -94,9 +99,6 @@ export class AuthService {
   }
 
   async loginCustomer(phone: string, otp: string) {
-    if (otp === DEV_OTP) {
-      return this.loginCustomerByPhone(phone);
-    }
     const record = getOtp(phone);
     if (!record || record.code !== otp) {
       throw new UnauthorizedException('Invalid or expired OTP');

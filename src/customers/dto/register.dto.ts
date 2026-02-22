@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 const DUMMY_OTP = '1111';
 
@@ -14,7 +14,14 @@ export class RegisterCustomerDto {
   @IsNotEmpty()
   phoneNumber: string;
 
-  @ApiProperty({ example: DUMMY_OTP, description: 'OTP (dummy: 1111)' })
+  @ApiProperty({ example: 'Jane Doe', description: 'Your name (2–200 characters)' })
+  @IsString()
+  @MinLength(2, { message: 'Name must be at least 2 characters' })
+  @MaxLength(200, { message: 'Name must be at most 200 characters' })
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ example: DUMMY_OTP, description: '4-digit verification code' })
   @IsString()
   @IsNotEmpty()
   otp: string;

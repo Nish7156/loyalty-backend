@@ -72,6 +72,7 @@ model Staff {
 
 model Customer {
   phoneNumber String    @id
+  name        String?
   streaks     Streak[]
   activities  Activity[]
   rewards     Reward[]

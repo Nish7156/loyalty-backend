@@ -28,7 +28,7 @@ export class CustomersController {
 
   @Post('register')
   async register(@Body() dto: RegisterCustomerDto) {
-    await this.customersService.registerAtBranch(dto.branchId, dto.phoneNumber, dto.otp);
+    await this.customersService.registerAtBranch(dto.branchId, dto.phoneNumber, dto.otp, dto.name);
     return this.authService.issueCustomerToken(dto.phoneNumber);
   }
 

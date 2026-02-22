@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Customer, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getOtp, getAndClearOtp } from '../auth/otp.store';
 import { CreateCustomerDto } from './dto/create-customer.dto';
-import { isOtpValid } from './dto/register.dto';
 
 @Injectable()
 export class CustomersService {
@@ -121,6 +121,7 @@ export class CustomersService {
     return {
       customer: {
         phoneNumber: customer.phoneNumber,
+        name: customer.name ?? null,
         streaks: customer.streaks,
         rewards: customer.rewards,
       },
@@ -177,15 +178,26 @@ export class CustomersService {
     };
   }
 
-  async registerAtBranch(branchId: string, phoneNumber: string, otp: string): Promise<Customer> {
-    if (!isOtpValid(otp)) {
+  async registerAtBranch(branchId: string, phoneNumber: string, otp: string, name: string): Promise<Customer> {
+    const record = getOtp(phoneNumber);
+    if (!record || record.type !== 'customer' || record.code !== otp) {
       throw new BadRequestException('Invalid OTP');
     }
+    if (new Date() > record.expiresAt) {
+      getAndClearOtp(phoneNumber);
+      throw new BadRequestException('OTP expired');
+    }
+    getAndClearOtp(phoneNumber);
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },
       include: { partner: true },
     });
     if (!branch) throw new NotFoundException('Branch not found');
-    return this.findOrCreate(phoneNumber);
+    const trimmedName = name.trim().slice(0, 200) || null;
+    return this.prisma.customer.upsert({
+      where: { phoneNumber },
+      create: { phoneNumber, name: trimmedName },
+      update: { name: trimmedName },
+    });
   }
 }
