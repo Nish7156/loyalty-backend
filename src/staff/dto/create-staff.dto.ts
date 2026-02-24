@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class CreateStaffDto {
   @ApiProperty()
@@ -10,6 +11,7 @@ export class CreateStaffDto {
   @ApiProperty({ example: '+919876543210' })
   @IsString()
   @IsNotEmpty()
+  @IsIndianPhone()
   phone: string;
 
   @ApiProperty()

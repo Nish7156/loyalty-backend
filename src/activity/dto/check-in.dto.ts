@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class RequestLocationDto {
   @ApiProperty()
@@ -21,6 +22,7 @@ export class CheckInDto {
   @ApiProperty({ example: '+919876543210' })
   @IsString()
   @IsNotEmpty()
+  @IsIndianPhone()
   phoneNumber: string;
 
   @ApiPropertyOptional({ description: 'Customer name (string only)' })

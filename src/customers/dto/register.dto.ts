@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 const DUMMY_OTP = '1111';
 
@@ -12,6 +13,7 @@ export class RegisterCustomerDto {
   @ApiProperty({ example: '+919876543210' })
   @IsString()
   @IsNotEmpty()
+  @IsIndianPhone()
   phoneNumber: string;
 
   @ApiProperty({ example: 'Jane Doe', description: 'Your name (2–200 characters)' })

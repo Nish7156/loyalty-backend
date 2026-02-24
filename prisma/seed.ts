@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const SUPER_ADMIN_PHONE = '1111111111';
+const SUPER_ADMIN_PHONE = '+918419997952';
 const STORE_OWNER_PHONE = '2222222222';
 const SELLER_PHONE = '3333333333';
 
