@@ -2,9 +2,10 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Indian format: +91 followed by 10-digit mobile (6–9)
 const SUPER_ADMIN_PHONE = '+918419997952';
-const STORE_OWNER_PHONE = '2222222222';
-const SELLER_PHONE = '3333333333';
+const STORE_OWNER_PHONE = '+919876543210';
+const SELLER_PHONE = '+919123456789';
 
 async function main() {
   // Super Admin — login via OTP only
