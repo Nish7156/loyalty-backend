@@ -2,8 +2,8 @@ name: Keep API alive
 
 on:
   schedule:
-    # Run every 11 minutes
-    - cron: '*/11 * * * *'
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual run
 
 jobs:

@@ -257,4 +257,12 @@ export class ActivityService {
     if (!activity) throw new NotFoundException('Activity not found');
     return activity;
   }
+
+  async findByBranchId(branchId: string) {
+    return this.prisma.activity.findMany({
+      where: { branchId },
+      include: { customer: true, branch: true, staff: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
