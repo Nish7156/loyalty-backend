@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString } from 'class-validator';
-import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
+import { IndianPhoneTransform, IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class CreatePartnerDto {
   @ApiProperty()
@@ -14,6 +15,7 @@ export class CreatePartnerDto {
   industryType: string;
 
   @ApiProperty({ example: '+919876543210', description: 'Phone number for the partner owner account (Indian format)' })
+  @Transform(IndianPhoneTransform)
   @IsString()
   @IsNotEmpty()
   @IsIndianPhone()

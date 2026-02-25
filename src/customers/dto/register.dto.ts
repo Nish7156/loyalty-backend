@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
+import { IndianPhoneTransform, IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 const DUMMY_OTP = '1111';
 
@@ -11,6 +12,7 @@ export class RegisterCustomerDto {
   branchId: string;
 
   @ApiProperty({ example: '+919876543210' })
+  @Transform(IndianPhoneTransform)
   @IsString()
   @IsNotEmpty()
   @IsIndianPhone()

@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsOptional, IsString } from 'class-validator';
-import { IsIndianPhone } from '../../common/validators/indian-phone.validator';
+import { IndianPhoneTransform, IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class UpdateStaffDto {
   @ApiPropertyOptional()
@@ -10,6 +11,7 @@ export class UpdateStaffDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(IndianPhoneTransform)
   @IsString()
   @IsIndianPhone()
   phone?: string;
