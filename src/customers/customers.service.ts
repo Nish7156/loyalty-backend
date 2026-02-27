@@ -129,6 +129,33 @@ export class CustomersService {
     };
   }
 
+  async getMyRequestsByPhone(phoneNumber: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { phoneNumber },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const activities = await this.prisma.activity.findMany({
+      where: { customerId: phoneNumber },
+      include: { branch: { include: { partner: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return activities.map((a) => ({
+      id: a.id,
+      customerId: a.customerId,
+      branchId: a.branchId,
+      staffId: a.staffId,
+      status: a.status,
+      value: a.value != null ? Number(a.value) : null,
+      customerName: a.customerName ?? null,
+      createdAt: a.createdAt,
+      branch: a.branch,
+      partner: a.branch.partner,
+    }));
+  }
+
   async getHistoryByPhone(phoneNumber: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { phoneNumber },

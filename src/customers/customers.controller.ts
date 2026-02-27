@@ -26,6 +26,12 @@ export class CustomersController {
     return this.customersService.getHistoryByPhone(req.user.phone);
   }
 
+  @Get('me/requests')
+  @UseGuards(JwtCustomerAuthGuard)
+  getMyRequests(@Req() req: { user: { phone: string } }) {
+    return this.customersService.getMyRequestsByPhone(req.user.phone);
+  }
+
   @Post('register')
   async register(@Body() dto: RegisterCustomerDto) {
     await this.customersService.registerAtBranch(dto.branchId, dto.phoneNumber, dto.otp, dto.name);
