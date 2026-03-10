@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { Fast2smsService } from '../fast2sms/fast2sms.service';
 import { getOtp, getAndClearOtp, setOtp } from './otp.store';
 
 export interface JwtStaffPayload {
@@ -42,6 +43,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly fast2sms: Fast2smsService,
   ) {}
 
   async sendOtp(phone: string, mpin?: string): Promise<{ success: true; otp?: string }> {
@@ -65,8 +67,17 @@ export class AuthService {
 
     const code = generateCustomerMpin();
     setOtp(phone, code, 'customer');
+    const digitsOnly = phone.replace(/\D/g, '');
+    const numberForSms = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
+    if (numberForSms.length >= 10) {
+      try {
+        await this.fast2sms.sendOtpViaQuickSms(numberForSms, code);
+      } catch {
+        // OTP is already stored; still return success so frontend shows OTP step (user can resend)
+      }
+    }
     const res: { success: true; otp?: string } = { success: true };
-    res.otp = code;
+    if (process.env.NODE_ENV !== 'production') res.otp = code;
     return res;
   }
 
