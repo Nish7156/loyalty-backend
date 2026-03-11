@@ -3,9 +3,10 @@ import { ActivityController } from './activity.controller';
 import { ActivityService } from './activity.service';
 import { CustomersModule } from '../customers/customers.module';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
-  imports: [CustomersModule, WebsocketModule],
+  imports: [CustomersModule, WebsocketModule, WalletModule],
   controllers: [ActivityController],
   providers: [ActivityService],
   exports: [ActivityService],

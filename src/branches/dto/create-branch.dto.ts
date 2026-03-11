@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
 
 export class CreateBranchDto {
   @ApiProperty()
@@ -11,6 +11,11 @@ export class CreateBranchDto {
   @IsUUID()
   @IsNotEmpty()
   partnerId: string;
+
+  @ApiPropertyOptional({ enum: ['VISITS', 'POINTS', 'HYBRID'], description: 'Loyalty system type' })
+  @IsOptional()
+  @IsEnum(['VISITS', 'POINTS', 'HYBRID'])
+  loyaltyType?: 'VISITS' | 'POINTS' | 'HYBRID';
 
   @ApiPropertyOptional({ description: 'e.g. { "streakThreshold": 20, "cooldownHours": 18 }' })
   @IsOptional()

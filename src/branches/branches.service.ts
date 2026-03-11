@@ -22,6 +22,7 @@ export class BranchesService {
       data: {
         branchName: dto.branchName,
         partnerId: dto.partnerId,
+        loyaltyType: dto.loyaltyType,
         settings: (dto.settings ?? undefined) as Prisma.InputJsonValue,
         location: (dto.location ?? undefined) as Prisma.InputJsonValue,
       },
@@ -43,15 +44,39 @@ export class BranchesService {
     return branch;
   }
 
-  async update(id: string, dto: UpdateBranchDto): Promise<Branch> {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateBranchDto, user?: User): Promise<Branch> {
+    const branch = await this.findOne(id);
+
+    // Check if settings are locked and user is trying to change them
+    if (branch.settingsLocked && user?.role === 'PARTNER_OWNER') {
+      // Partner owners cannot change locked settings
+      if (dto.loyaltyType !== undefined || dto.settings !== undefined) {
+        throw new ForbiddenException(
+          'Branch settings are locked. Contact admin to make changes.',
+        );
+      }
+    }
+
+    // Only admins can change settingsLocked field
+    const dataToUpdate: Prisma.BranchUpdateInput = {
+      branchName: dto.branchName,
+      location: dto.location as Prisma.InputJsonValue | undefined,
+    };
+
+    // Only allow loyalty type and settings changes if not locked or user is admin
+    if (!branch.settingsLocked || user?.role === 'SUPER_ADMIN') {
+      dataToUpdate.loyaltyType = dto.loyaltyType;
+      dataToUpdate.settings = dto.settings as Prisma.InputJsonValue | undefined;
+    }
+
+    // Only admins can change the lock status
+    if (user?.role === 'SUPER_ADMIN' && dto.settingsLocked !== undefined) {
+      dataToUpdate.settingsLocked = dto.settingsLocked;
+    }
+
     return this.prisma.branch.update({
       where: { id },
-      data: {
-        branchName: dto.branchName,
-        settings: dto.settings as Prisma.InputJsonValue | undefined,
-        location: dto.location as Prisma.InputJsonValue | undefined,
-      },
+      data: dataToUpdate,
     });
   }
 

@@ -40,8 +40,10 @@ export class BranchesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateBranchDto) {
-    return this.branchesService.update(id, dto);
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
+  update(@Param('id') id: string, @Body() dto: UpdateBranchDto, @Req() req: { user: User }) {
+    return this.branchesService.update(id, dto, req.user);
   }
 
   @Delete(':id')

@@ -110,6 +110,11 @@ export class AuthService {
   }
 
   async loginCustomer(phone: string, otp: string) {
+    // Hardcoded dev OTP: 1111 always accepted in non-production
+    if (otp === DEV_OTP && process.env.NODE_ENV !== 'production') {
+      return this.loginCustomerByPhone(phone);
+    }
+
     const record = getOtp(phone);
     if (!record || record.code !== otp) {
       throw new UnauthorizedException('Invalid or expired OTP');

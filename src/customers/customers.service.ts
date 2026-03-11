@@ -1,12 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { Customer, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { WalletService } from '../wallet/wallet.service';
 import { getOtp, getAndClearOtp } from '../auth/otp.store';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => WalletService))
+    private readonly walletService: WalletService,
+  ) {}
 
   async findOrCreate(phoneNumber: string): Promise<Customer> {
     let customer = await this.prisma.customer.findUnique({
@@ -118,6 +123,8 @@ export class CustomersService {
       };
     });
 
+    const walletBalances = await this.walletService.getAllBalances(phoneNumber);
+
     return {
       customer: {
         phoneNumber: customer.phoneNumber,
@@ -126,6 +133,7 @@ export class CustomersService {
         rewards: customer.rewards,
       },
       storesVisited,
+      wallets: walletBalances,
     };
   }
 

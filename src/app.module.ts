@@ -12,6 +12,7 @@ import { RewardsModule } from './rewards/rewards.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { Fast2smsModule } from './fast2sms/fast2sms.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { Fast2smsModule } from './fast2sms/fast2sms.module';
     WebsocketModule,
     FeedbackModule,
     Fast2smsModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [AppService],

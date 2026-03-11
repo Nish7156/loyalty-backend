@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_COOLDOWN_HOURS } from '../common/constants';
 import { CustomersService } from '../customers/customers.service';
+import { WalletService } from '../wallet/wallet.service';
 import { CheckInDto } from './dto/check-in.dto';
 
 const COOLDOWN_HOURS_KEY = 'cooldownHours';
@@ -23,6 +24,7 @@ export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly customersService: CustomersService,
+    private readonly walletService: WalletService,
   ) {}
 
   /** Cooldown in minutes. Reads cooldownMinutes, else cooldownHours * 60, else default. Capped at 48h. */
@@ -164,6 +166,8 @@ export class ActivityService {
     const threshold = this.getStreakThreshold(activity.branch);
     const windowDays = this.getRewardWindowDays(activity.branch);
     const serverNow = new Date();
+    const loyaltyType = activity.branch.loyaltyType || 'VISITS';
+
     const result = await this.prisma.$transaction(async (tx) => {
       const updateData: { status: ActivityStatus; staffId: string; value?: Decimal } = {
         status: ActivityStatus.APPROVED,
@@ -176,62 +180,80 @@ export class ActivityService {
         include: { customer: true, branch: true },
       });
 
-      const existing = await tx.streak.findUnique({
-        where: {
-          customerId_partnerId: {
-            customerId: activity.customerId,
-            partnerId: activity.branch.partnerId,
-          },
-        },
-      });
-
-      const periodEnd = existing?.lastActivityAt
-        ? new Date(existing.lastActivityAt.getTime() + windowDays * 24 * 60 * 60 * 1000)
-        : null;
-      const periodExpired = periodEnd ? serverNow > periodEnd : true;
-
-      let streak: { id: string; currentCount: number; lastActivityAt: Date | null };
-      if (!existing) {
-        streak = await tx.streak.create({
-          data: {
-            customerId: activity.customerId,
-            partnerId: activity.branch.partnerId,
-            currentCount: 1,
-            lastActivityAt: serverNow,
-          },
-        });
-      } else if (periodExpired) {
-        streak = await tx.streak.update({
-          where: { id: existing.id },
-          data: { currentCount: 1, lastActivityAt: serverNow },
-        });
-      } else {
-        streak = await tx.streak.update({
-          where: { id: existing.id },
-          data: { currentCount: { increment: 1 }, lastActivityAt: serverNow },
-        });
-      }
-
+      let streak: { id: string; currentCount: number; lastActivityAt: Date | null } | null = null;
       let reward: { id: string; customerId: string; partnerId: string; status: string; expiryDate: Date | null; createdAt: Date } | null = null;
-      if (streak.currentCount >= threshold) {
-        const expiry = new Date(serverNow.getTime());
-        expiry.setDate(expiry.getDate() + 30);
-        reward = await tx.reward.create({
-          data: {
-            customerId: activity.customerId,
-            partnerId: activity.branch.partnerId,
-            status: 'ACTIVE',
-            expiryDate: expiry,
+
+      // Only process streak/visit logic if loyalty type is VISITS or HYBRID
+      if (loyaltyType === 'VISITS' || loyaltyType === 'HYBRID') {
+        const existing = await tx.streak.findUnique({
+          where: {
+            customerId_partnerId: {
+              customerId: activity.customerId,
+              partnerId: activity.branch.partnerId,
+            },
           },
         });
-        await tx.streak.update({
-          where: { id: streak.id },
-          data: { currentCount: 0, lastActivityAt: serverNow },
-        });
+
+        const periodEnd = existing?.lastActivityAt
+          ? new Date(existing.lastActivityAt.getTime() + windowDays * 24 * 60 * 60 * 1000)
+          : null;
+        const periodExpired = periodEnd ? serverNow > periodEnd : true;
+
+        if (!existing) {
+          streak = await tx.streak.create({
+            data: {
+              customerId: activity.customerId,
+              partnerId: activity.branch.partnerId,
+              currentCount: 1,
+              lastActivityAt: serverNow,
+            },
+          });
+        } else if (periodExpired) {
+          streak = await tx.streak.update({
+            where: { id: existing.id },
+            data: { currentCount: 1, lastActivityAt: serverNow },
+          });
+        } else {
+          streak = await tx.streak.update({
+            where: { id: existing.id },
+            data: { currentCount: { increment: 1 }, lastActivityAt: serverNow },
+          });
+        }
+
+        if (streak.currentCount >= threshold) {
+          const expiry = new Date(serverNow.getTime());
+          expiry.setDate(expiry.getDate() + 30);
+          reward = await tx.reward.create({
+            data: {
+              customerId: activity.customerId,
+              partnerId: activity.branch.partnerId,
+              status: 'ACTIVE',
+              expiryDate: expiry,
+            },
+          });
+          await tx.streak.update({
+            where: { id: streak.id },
+            data: { currentCount: 0, lastActivityAt: serverNow },
+          });
+        }
       }
 
       return { activity: updated, streak, reward };
     });
+
+    let walletResult: { pointsEarned: number; newBalance: number; partnerId: string; partnerName: string } | null = null;
+    // Only process wallet points if loyalty type is POINTS or HYBRID
+    if ((loyaltyType === 'POINTS' || loyaltyType === 'HYBRID') && result.activity.value && Number(result.activity.value) > 0) {
+      try {
+        walletResult = await this.walletService.processActivityApproval(
+          activity.customerId,
+          activity.branchId,
+          Number(result.activity.value),
+        );
+      } catch (error) {
+        console.error('Wallet points processing error:', error);
+      }
+    }
 
     return {
       ...result.activity,
@@ -239,6 +261,7 @@ export class ActivityService {
       streak: result.streak,
       rewardCreated: result.reward != null,
       reward: result.reward,
+      walletPoints: walletResult,
     };
   }
 
