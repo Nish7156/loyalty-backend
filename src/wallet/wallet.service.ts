@@ -226,19 +226,15 @@ export class WalletService {
 
     const wallet = await this.getOrCreateWallet(customerId, partnerId);
     const pointsToRewardRatio = this.getPointsToRewardRatio(branch);
-    const minimumRedemptionPoints = this.getMinimumRedemptionPoints(branch);
 
     const balance = Number(wallet.balance);
-    if (balance < minimumRedemptionPoints) {
-      throw new BadRequestException(
-        `Minimum ${minimumRedemptionPoints} points required for redemption`,
-      );
-    }
-
     const rewardCount = Math.floor(balance / pointsToRewardRatio);
+
+    // Check if customer has enough points for at least 1 reward
     if (rewardCount === 0) {
+      const pointsNeeded = pointsToRewardRatio - balance;
       throw new BadRequestException(
-        `You need at least ${pointsToRewardRatio} points to redeem for a reward`,
+        `You need ${pointsToRewardRatio} points to redeem 1 reward. You have ${balance.toFixed(0)} points (${pointsNeeded.toFixed(0)} more needed).`,
       );
     }
 
