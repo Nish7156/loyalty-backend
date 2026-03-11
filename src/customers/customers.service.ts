@@ -82,6 +82,7 @@ export class CustomersService {
         partnerName: string;
         visitCount: number;
         lastVisitAt: Date;
+        loyaltyType?: string;
         rewardThreshold?: number;
         rewardWindowDays?: number;
         rewardDescription?: string;
@@ -103,6 +104,7 @@ export class CustomersService {
           partnerName: a.branch.partner.businessName,
           visitCount: 0,
           lastVisitAt: a.createdAt,
+          loyaltyType: a.branch.loyaltyType || 'VISITS',
           rewardThreshold,
           rewardWindowDays,
           rewardDescription,
