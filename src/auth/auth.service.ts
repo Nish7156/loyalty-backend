@@ -77,7 +77,15 @@ export class AuthService {
       return res;
     }
 
-    this.logger.log(`No user/staff found for phone: ${phone}, treating as customer`);
+    // Check if customer exists and is already verified
+    const customer = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
+    if (customer?.isVerified) {
+      this.logger.log(`Verified customer found for phone: ${phone}, skipping OTP - direct login allowed`);
+      // Return success without sending SMS - customer can login directly
+      return { success: true };
+    }
+
+    this.logger.log(`No user/staff found for phone: ${phone}, treating as new/unverified customer`);
     const code = generateCustomerMpin();
     setOtp(phone, code, 'customer');
     this.logger.log(`Generated customer MPIN: ${code} for phone: ${phone}`);
@@ -137,23 +145,37 @@ export class AuthService {
   }
 
   async loginCustomer(phone: string, otp: string) {
+    this.logger.log(`loginCustomer called for phone: ${phone}`);
+
+    // Check if customer is already verified - allow direct login without OTP
+    const customer = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
+    if (customer?.isVerified) {
+      this.logger.log(`Verified customer ${phone} - allowing direct login without OTP verification`);
+      return this.loginCustomerByPhone(phone);
+    }
+
     // Hardcoded dev OTP: 1111 always accepted in non-production
     if (otp === DEV_OTP && process.env.NODE_ENV !== 'production') {
+      this.logger.log(`Dev mode - accepting hardcoded OTP for ${phone}`);
       return this.loginCustomerByPhone(phone);
     }
 
     const record = getOtp(phone);
     if (!record || record.code !== otp) {
+      this.logger.warn(`Invalid OTP attempt for ${phone}`);
       throw new UnauthorizedException('Invalid or expired OTP');
     }
     if (new Date() > record.expiresAt) {
       getAndClearOtp(phone);
+      this.logger.warn(`Expired OTP attempt for ${phone}`);
       throw new UnauthorizedException('OTP expired');
     }
     getAndClearOtp(phone);
     if (record.type !== 'customer') {
+      this.logger.warn(`Wrong OTP type for customer ${phone}`);
       throw new UnauthorizedException('Invalid OTP for customer');
     }
+    this.logger.log(`OTP verified successfully for new customer ${phone}`);
     return this.loginCustomerByPhone(phone);
   }
 
@@ -162,11 +184,13 @@ export class AuthService {
   }
 
   private async loginCustomerByPhone(phone: string) {
-    await this.prisma.customer.upsert({
+    // Mark customer as verified on first successful login
+    const customer = await this.prisma.customer.upsert({
       where: { phoneNumber: phone },
-      create: { phoneNumber: phone },
-      update: {},
+      create: { phoneNumber: phone, isVerified: true },
+      update: { isVerified: true },
     });
+    this.logger.log(`Customer ${phone} logged in successfully, verified status: ${customer.isVerified}`);
     const payload: JwtCustomerPayload = { phone, type: 'customer' };
     const token = this.jwtService.sign(payload, { expiresIn: '3650d' });
     return { access_token: token, customer: { phone } };

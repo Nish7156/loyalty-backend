@@ -92,6 +92,7 @@ model Staff {
 model Customer {
   phoneNumber String     @id
   name        String?
+  isVerified  Boolean    @default(false)
   streaks     Streak[]
   activities  Activity[]
   rewards     Reward[]
