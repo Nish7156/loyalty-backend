@@ -56,20 +56,25 @@ export class CustomersService {
   }
 
   async getProfileByPhone(phoneNumber: string) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { phoneNumber },
-      include: {
-        streaks: { include: { partner: true } },
-        rewards: { include: { partner: true } },
-      },
-    });
-    if (!customer) throw new NotFoundException('Customer not found');
+    // Parallel fetch for better performance
+    const [customer, approvedActivities, walletBalances] = await Promise.all([
+      this.prisma.customer.findUnique({
+        where: { phoneNumber },
+        include: {
+          streaks: { include: { partner: true } },
+          rewards: { include: { partner: true } },
+        },
+      }),
+      this.prisma.activity.findMany({
+        where: { customerId: phoneNumber, status: 'APPROVED' },
+        include: { branch: { include: { partner: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100, // Limit to last 100 activities for performance
+      }),
+      this.walletService.getAllBalances(phoneNumber),
+    ]);
 
-    const approvedActivities = await this.prisma.activity.findMany({
-      where: { customerId: phoneNumber, status: 'APPROVED' },
-      include: { branch: { include: { partner: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+    if (!customer) throw new NotFoundException('Customer not found');
 
     const DEFAULT_REWARD_WINDOW_DAYS = 30;
     const DEFAULT_REWARD_DESCRIPTION = 'Free reward';
@@ -124,8 +129,6 @@ export class CustomersService {
         streakLastActivityAt: streak?.lastActivityAt ?? null,
       };
     });
-
-    const walletBalances = await this.walletService.getAllBalances(phoneNumber);
 
     return {
       customer: {
