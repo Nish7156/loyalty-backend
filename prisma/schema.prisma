@@ -19,8 +19,9 @@ enum ActivityStatus {
 }
 
 enum RewardStatus {
-  ACTIVE
-  REDEEMED
+  ACTIVE      // Earned from visits, ready to use
+  PENDING     // Customer requested redemption, awaiting staff approval
+  REDEEMED    // Staff verified and completed
 }
 
 enum WalletTransactionType {
@@ -153,10 +154,12 @@ model Reward {
   status                RewardStatus @default(ACTIVE)
   expiryDate            DateTime?
   createdAt             DateTime     @default(now())
-  redeemedAt            DateTime?
-  redeemedBranchId      String?
+  redeemedAt            DateTime?    // When customer clicked "Redeem"
+  redeemedBranchId      String?      // Which branch completed it
   redemptionCode        String?      @unique
-  redemptionCompletedAt DateTime?
+  redemptionCompletedAt DateTime?    // When staff verified code
+  pointsCost            Decimal?     @db.Decimal(10, 2) // Points used (for PENDING/REDEEMED from points)
+  source                String?      @default("VISITS") // "VISITS" or "POINTS"
   customer              Customer     @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
   partner               Partner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   redeemedBranch        Branch?      @relation(fields: [redeemedBranchId], references: [id], onDelete: SetNull)

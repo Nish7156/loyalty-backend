@@ -207,6 +207,10 @@ export class WalletService {
     }));
   }
 
+  /**
+   * Customer requests reward redemption - creates PENDING reward with code
+   * Points are NOT deducted yet - only when staff verifies the code
+   */
   async redeemPointsForReward(customerId: string, partnerId: string, branchId: string) {
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },
@@ -239,41 +243,56 @@ export class WalletService {
     }
 
     const pointsToSpend = rewardCount * pointsToRewardRatio;
+    const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const { wallet: updatedWallet } = await this.deductPoints(
-        customerId,
-        partnerId,
-        pointsToSpend,
-        `Redeemed ${rewardCount} reward(s)`,
-        { rewardCount, branchId },
-      );
-
-      const rewards: any[] = [];
-      const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Create PENDING rewards with redemption code - points NOT deducted yet
+    const rewards = await this.prisma.$transaction(async (tx) => {
+      const createdRewards: any[] = [];
 
       for (let i = 0; i < rewardCount; i++) {
+        // Generate unique redemption code
+        const code = this.generateRedemptionCode();
+
         const reward = await tx.reward.create({
           data: {
             customerId,
             partnerId,
-            status: 'ACTIVE',
+            status: 'PENDING',  // ← PENDING until staff verifies
             expiryDate: expiry,
+            redemptionCode: code,
+            redeemedAt: new Date(),  // When customer requested
+            pointsCost: pointsToRewardRatio,  // Track points needed
+            source: 'POINTS',  // Source: points redemption
           },
         });
-        rewards.push(reward);
+        createdRewards.push(reward);
       }
 
-      return { wallet: updatedWallet, rewards };
+      return createdRewards;
     });
 
     return {
       success: true,
-      pointsSpent: pointsToSpend,
+      pointsToSpend: pointsToSpend,  // Will be deducted when staff approves
       rewardsCreated: rewardCount,
-      rewards: result.rewards,
-      remainingBalance: Number(result.wallet.balance),
+      rewards: rewards,
+      remainingBalance: balance,  // Balance unchanged (not deducted yet)
+      message: 'Show redemption code(s) to staff for verification',
     };
+  }
+
+  /**
+   * Generate 8-char unique redemption code
+   */
+  private generateRedemptionCode(): string {
+    const REDEMPTION_CODE_LENGTH = 8;
+    const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = require('crypto').randomBytes(REDEMPTION_CODE_LENGTH);
+    let code = '';
+    for (let i = 0; i < REDEMPTION_CODE_LENGTH; i++) {
+      code += CODE_CHARS[bytes[i]! % CODE_CHARS.length];
+    }
+    return code;
   }
 
   async processActivityApproval(
