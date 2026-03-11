@@ -48,7 +48,7 @@ export class AuthService {
     private readonly fast2sms: Fast2smsService,
   ) {}
 
-  async sendOtp(phone: string, mpin?: string): Promise<{ success: true; otp?: string }> {
+  async sendOtp(phone: string, mpin?: string): Promise<{ success: true; otp?: string; skipOtp?: boolean }> {
     this.logger.log(`sendOtp called for phone: ${phone}`);
 
     const user = await this.prisma.user.findFirst({ where: { phone } });
@@ -81,8 +81,8 @@ export class AuthService {
     const customer = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
     if (customer?.isVerified) {
       this.logger.log(`Verified customer found for phone: ${phone}, skipping OTP - direct login allowed`);
-      // Return success without sending SMS - customer can login directly
-      return { success: true };
+      // Return success with skipOtp flag - customer can login directly
+      return { success: true, skipOtp: true };
     }
 
     this.logger.log(`No user/staff found for phone: ${phone}, treating as new/unverified customer`);
