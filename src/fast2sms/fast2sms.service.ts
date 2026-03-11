@@ -107,6 +107,7 @@ export class Fast2smsService {
 
   async sendOtpViaQuickSms(numbers: string | string[], otp: string, flash = false): Promise<SendOtpResult> {
     this.logger.log(`Sending OTP via Quick SMS to ${numbers}`);
-    return this.sendQuickSms(numbers, `Your OTP: ${otp}`, flash);
+    const message = `Your Loyalty Platform OTP is ${otp}. Valid for 5 minutes. Do not share this code. - WebTriggers`;
+    return this.sendQuickSms(numbers, message, flash);
   }
 }
