@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,6 +40,8 @@ function generateCustomerMpin(): string {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -47,37 +49,62 @@ export class AuthService {
   ) {}
 
   async sendOtp(phone: string, mpin?: string): Promise<{ success: true; otp?: string }> {
+    this.logger.log(`sendOtp called for phone: ${phone}`);
+
     const user = await this.prisma.user.findFirst({ where: { phone } });
     if (user) {
+      this.logger.log(`User found for phone: ${phone}, generating platform OTP`);
       const code = generateOtp();
       setOtp(phone, code, 'platform');
       const res: { success: true; otp?: string } = { success: true };
-      if (process.env.NODE_ENV !== 'production') res.otp = code;
+      if (process.env.NODE_ENV !== 'production') {
+        res.otp = code;
+        this.logger.debug(`Dev mode - OTP for ${phone}: ${code}`);
+      }
       return res;
     }
 
     const staff = await this.prisma.staff.findFirst({ where: { phone } });
     if (staff) {
+      this.logger.log(`Staff found for phone: ${phone}, generating staff OTP`);
       const code = generateOtp();
       setOtp(phone, code, 'staff');
       const res: { success: true; otp?: string } = { success: true };
-      if (process.env.NODE_ENV !== 'production') res.otp = code;
+      if (process.env.NODE_ENV !== 'production') {
+        res.otp = code;
+        this.logger.debug(`Dev mode - OTP for ${phone}: ${code}`);
+      }
       return res;
     }
 
+    this.logger.log(`No user/staff found for phone: ${phone}, treating as customer`);
     const code = generateCustomerMpin();
     setOtp(phone, code, 'customer');
+    this.logger.log(`Generated customer MPIN: ${code} for phone: ${phone}`);
+
     const digitsOnly = phone.replace(/\D/g, '');
     const numberForSms = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
+    this.logger.log(`Normalized phone number for SMS: ${numberForSms} (original: ${phone})`);
+
     if (numberForSms.length >= 10) {
       try {
-        await this.fast2sms.sendOtpViaQuickSms(numberForSms, code);
-      } catch {
+        this.logger.log(`Attempting to send OTP via Fast2SMS to: ${numberForSms}`);
+        const result = await this.fast2sms.sendOtpViaQuickSms(numberForSms, code);
+        this.logger.log(`OTP sent successfully via Fast2SMS, request_id: ${result.request_id}`);
+      } catch (error) {
         // OTP is already stored; still return success so frontend shows OTP step (user can resend)
+        this.logger.error(`Failed to send OTP via Fast2SMS to ${numberForSms}:`, error instanceof Error ? error.message : String(error));
+        this.logger.warn(`OTP ${code} is stored locally for phone ${phone}, user can retry or use it if they received it`);
       }
+    } else {
+      this.logger.warn(`Phone number ${phone} is too short (${numberForSms.length} digits), skipping SMS`);
     }
+
     const res: { success: true; otp?: string } = { success: true };
-    if (process.env.NODE_ENV !== 'production') res.otp = code;
+    if (process.env.NODE_ENV !== 'production') {
+      res.otp = code;
+      this.logger.debug(`Dev mode - OTP for ${phone}: ${code}`);
+    }
     return res;
   }
 
