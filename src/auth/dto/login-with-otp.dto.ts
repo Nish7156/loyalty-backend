@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { IndianPhoneTransform, IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class LoginWithOtpDto {
@@ -11,8 +11,8 @@ export class LoginWithOtpDto {
   @IsIndianPhone()
   phone: string;
 
-  @ApiProperty({ example: '1111' })
+  @ApiProperty({ example: '1111', required: false, description: 'OTP code. Not required for verified customers.' })
   @IsString()
-  @IsNotEmpty()
-  otp: string;
+  @IsOptional()
+  otp?: string;
 }

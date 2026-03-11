@@ -144,14 +144,20 @@ export class AuthService {
     return this.loginStaffByPhone(phone);
   }
 
-  async loginCustomer(phone: string, otp: string) {
-    this.logger.log(`loginCustomer called for phone: ${phone}`);
+  async loginCustomer(phone: string, otp?: string) {
+    this.logger.log(`loginCustomer called for phone: ${phone}, OTP provided: ${!!otp}`);
 
     // Check if customer is already verified - allow direct login without OTP
     const customer = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
-    if (customer?.isVerified) {
+    if (customer?.isVerified && (!otp || !otp.trim())) {
       this.logger.log(`Verified customer ${phone} - allowing direct login without OTP verification`);
       return this.loginCustomerByPhone(phone);
+    }
+
+    // If OTP is not provided but customer is not verified, reject
+    if (!otp || !otp.trim()) {
+      this.logger.warn(`Login attempt without OTP for unverified customer ${phone}`);
+      throw new UnauthorizedException('OTP is required');
     }
 
     // Hardcoded dev OTP: 1111 always accepted in non-production
