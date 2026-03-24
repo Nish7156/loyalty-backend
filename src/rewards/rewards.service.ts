@@ -122,72 +122,16 @@ export class RewardsService {
       throw new BadRequestException('You cannot complete this reward at your branch');
     }
 
-    // Complete the reward in a transaction
-    return this.prisma.$transaction(async (tx) => {
-      // If this is a POINTS-based reward (status PENDING), deduct points now
-      if (reward.source === 'POINTS' && reward.status === 'PENDING' && reward.pointsCost) {
-        const pointsCost = Number(reward.pointsCost);
-
-        // Find wallet
-        const wallet = await tx.wallet.findUnique({
-          where: {
-            customerId_partnerId: {
-              customerId: reward.customerId,
-              partnerId: reward.partnerId,
-            },
-          },
-        });
-
-        if (!wallet) {
-          throw new NotFoundException('Wallet not found');
-        }
-
-        const currentBalance = Number(wallet.balance);
-        if (currentBalance < pointsCost) {
-          throw new BadRequestException(
-            `Insufficient points. Required: ${pointsCost}, Available: ${currentBalance}`,
-          );
-        }
-
-        // Deduct points
-        const newBalance = currentBalance - pointsCost;
-
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            balance: newBalance,
-            lifetimeSpent: { increment: pointsCost },
-          },
-        });
-
-        // Create transaction record
-        await tx.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            type: 'SPEND',
-            amount: -pointsCost,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            description: `Reward redeemed at branch`,
-            metadata: {
-              rewardId: reward.id,
-              branchId: staffBranchId,
-              redemptionCode: trimmed,
-            },
-          },
-        });
-      }
-
-      // Update reward status
-      return tx.reward.update({
-        where: { id: reward.id },
-        data: {
-          status: 'REDEEMED',  // Mark as fully redeemed
-          redemptionCompletedAt: new Date(),  // When staff verified
-          redeemedBranchId: staffBranchId,  // Track which branch redeemed
-        },
-        include: { customer: true, partner: true, redeemedBranch: true },
-      });
+    // Complete the reward - Points already deducted during redemption request
+    // Staff verification just confirms the reward was given to customer
+    return this.prisma.reward.update({
+      where: { id: reward.id },
+      data: {
+        status: 'REDEEMED',  // Mark as fully redeemed
+        redemptionCompletedAt: new Date(),  // When staff verified
+        redeemedBranchId: staffBranchId,  // Track which branch redeemed
+      },
+      include: { customer: true, partner: true, redeemedBranch: true },
     });
   }
 }

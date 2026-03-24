@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Branch, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
@@ -7,6 +7,57 @@ import { UpdateBranchDto } from './dto/update-branch.dto';
 @Injectable()
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Validate branch settings to prevent configuration conflicts
+   */
+  private validateSettings(settings: Record<string, any> | null | undefined): void {
+    if (!settings) return;
+
+    // Check for cooldown configuration conflict
+    const hasCooldownHours = typeof settings.cooldownHours === 'number';
+    const hasCooldownMinutes = typeof settings.cooldownMinutes === 'number';
+
+    if (hasCooldownHours && hasCooldownMinutes) {
+      throw new BadRequestException(
+        'Cannot set both cooldownHours and cooldownMinutes. Please use only one cooldown setting.'
+      );
+    }
+
+    // Validate cooldown values are positive
+    if (hasCooldownHours && settings.cooldownHours < 0) {
+      throw new BadRequestException('cooldownHours must be a positive number');
+    }
+
+    if (hasCooldownMinutes && settings.cooldownMinutes < 0) {
+      throw new BadRequestException('cooldownMinutes must be a positive number');
+    }
+
+    // Validate other common settings
+    if (settings.streakThreshold !== undefined && settings.streakThreshold <= 0) {
+      throw new BadRequestException('streakThreshold must be greater than 0');
+    }
+
+    if (settings.rewardWindowDays !== undefined && settings.rewardWindowDays <= 0) {
+      throw new BadRequestException('rewardWindowDays must be greater than 0');
+    }
+
+    if (settings.pointsPercentage !== undefined && (settings.pointsPercentage < 0 || settings.pointsPercentage > 100)) {
+      throw new BadRequestException('pointsPercentage must be between 0 and 100');
+    }
+
+    if (settings.pointsExpiryDays !== undefined && settings.pointsExpiryDays <= 0) {
+      throw new BadRequestException('pointsExpiryDays must be greater than 0');
+    }
+
+    if (settings.pointsToRewardRatio !== undefined && settings.pointsToRewardRatio <= 0) {
+      throw new BadRequestException('pointsToRewardRatio must be greater than 0');
+    }
+
+    if (settings.minimumRedemptionPoints !== undefined && settings.minimumRedemptionPoints < 0) {
+      throw new BadRequestException('minimumRedemptionPoints must be 0 or greater');
+    }
+  }
 
   async create(dto: CreateBranchDto, user?: User): Promise<Branch> {
     if (user?.role === 'PARTNER_OWNER') {
@@ -18,6 +69,10 @@ export class BranchesService {
         throw new ForbiddenException('You can only create branches for your own store');
       }
     }
+
+    // Validate settings before creating branch
+    this.validateSettings(dto.settings as Record<string, any> | null | undefined);
+
     return this.prisma.branch.create({
       data: {
         branchName: dto.branchName,
@@ -65,6 +120,10 @@ export class BranchesService {
 
     // Only allow loyalty type and settings changes if not locked or user is admin
     if (!branch.settingsLocked || user?.role === 'SUPER_ADMIN') {
+      // Validate settings before updating
+      if (dto.settings !== undefined) {
+        this.validateSettings(dto.settings as Record<string, any> | null | undefined);
+      }
       dataToUpdate.loyaltyType = dto.loyaltyType;
       dataToUpdate.settings = dto.settings as Prisma.InputJsonValue | undefined;
     }

@@ -209,7 +209,7 @@ export class WalletService {
 
   /**
    * Customer requests reward redemption - creates PENDING reward with code
-   * Points are NOT deducted yet - only when staff verifies the code
+   * Points ARE deducted immediately to prevent duplicate redemptions
    */
   async redeemPointsForReward(customerId: string, partnerId: string, branchId: string) {
     const branch = await this.prisma.branch.findUnique({
@@ -241,10 +241,42 @@ export class WalletService {
     const pointsToSpend = rewardCount * pointsToRewardRatio;
     const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Create PENDING rewards with redemption code - points NOT deducted yet
-    const rewards = await this.prisma.$transaction(async (tx) => {
+    // Create PENDING rewards with redemption code AND deduct points immediately
+    const result = await this.prisma.$transaction(async (tx) => {
       const createdRewards: any[] = [];
 
+      // Deduct points first to prevent duplicate redemptions
+      const pointsDecimal = new Decimal(pointsToSpend);
+      const balanceBefore = wallet.balance;
+      const balanceAfter = balanceBefore.sub(pointsDecimal);
+
+      if (balanceAfter.isNegative()) {
+        throw new BadRequestException('Insufficient points balance');
+      }
+
+      // Update wallet balance
+      const updatedWallet = await tx.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          balance: balanceAfter,
+          lifetimeSpent: wallet.lifetimeSpent.add(pointsDecimal),
+        },
+      });
+
+      // Create wallet transaction for the spend
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: WalletTransactionType.SPEND,
+          amount: pointsDecimal.negated(),
+          balanceBefore,
+          balanceAfter,
+          description: `Redeemed ${rewardCount} reward${rewardCount !== 1 ? 's' : ''}`,
+          metadata: { branchId, rewardCount },
+        },
+      });
+
+      // Create PENDING rewards with redemption codes
       for (let i = 0; i < rewardCount; i++) {
         // Generate unique redemption code
         const code = this.generateRedemptionCode();
@@ -257,22 +289,22 @@ export class WalletService {
             expiryDate: expiry,
             redemptionCode: code,
             redeemedAt: new Date(),  // When customer requested
-            pointsCost: pointsToRewardRatio,  // Track points needed
+            pointsCost: pointsToRewardRatio,  // Track points cost
             source: 'POINTS',  // Source: points redemption
           },
         });
         createdRewards.push(reward);
       }
 
-      return createdRewards;
+      return { rewards: createdRewards, newBalance: Number(balanceAfter) };
     });
 
     return {
       success: true,
-      pointsToSpend: pointsToSpend,  // Will be deducted when staff approves
+      pointsToSpend: pointsToSpend,  // Points deducted immediately
       rewardsCreated: rewardCount,
-      rewards: rewards,
-      remainingBalance: balance,  // Balance unchanged (not deducted yet)
+      rewards: result.rewards,
+      remainingBalance: result.newBalance,  // Balance after deduction
       message: 'Show redemption code(s) to staff for verification',
     };
   }
@@ -336,32 +368,76 @@ export class WalletService {
 
   async expirePoints() {
     const now = new Date();
+
+    // Find all expired transactions that haven't been processed yet
     const expiredTransactions = await this.prisma.walletTransaction.findMany({
       where: {
         type: WalletTransactionType.EARN,
         expiresAt: { lte: now },
-        wallet: {
-          transactions: {
-            none: {
-              type: WalletTransactionType.EXPIRE,
-              metadata: {
-                path: ['expiredTransactionId'],
-                equals: undefined,
-              },
-            },
-          },
-        },
       },
-      include: { wallet: true },
+      include: {
+        wallet: true,
+      },
+      orderBy: { expiresAt: 'asc' }, // Process oldest expirations first
     });
 
-    for (const transaction of expiredTransactions) {
-      const wallet = transaction.wallet;
-      const expiredAmount = transaction.amount;
-      const balanceBefore = wallet.balance;
-      const balanceAfter = balanceBefore.sub(expiredAmount);
+    let processedCount = 0;
 
-      if (!balanceAfter.isNegative()) {
+    // Group by wallet to process all expirations for each wallet together
+    const byWallet = new Map<string, typeof expiredTransactions>();
+    for (const tx of expiredTransactions) {
+      const list = byWallet.get(tx.walletId) || [];
+      list.push(tx);
+      byWallet.set(tx.walletId, list);
+    }
+
+    // Process each wallet's expired points
+    for (const [walletId, transactions] of byWallet.entries()) {
+      const wallet = transactions[0].wallet;
+      let currentBalance = new Decimal(wallet.balance);
+
+      // Check if already processed by looking for EXPIRE transactions
+      const alreadyExpired = await this.prisma.walletTransaction.findMany({
+        where: {
+          walletId,
+          type: WalletTransactionType.EXPIRE,
+        },
+        select: {
+          metadata: true,
+        },
+      });
+
+      const expiredTxIds = new Set(
+        alreadyExpired
+          .map(tx => tx.metadata as Record<string, any>)
+          .filter(m => m?.expiredTransactionId)
+          .map(m => m.expiredTransactionId)
+      );
+
+      // Process each expired transaction for this wallet
+      for (const transaction of transactions) {
+        // Skip if already processed
+        if (expiredTxIds.has(transaction.id)) {
+          continue;
+        }
+
+        const expiredAmount = transaction.amount;
+        const balanceBefore = currentBalance;
+
+        // Calculate how much we can actually expire (prevent negative balance)
+        // If balance is 50 and trying to expire 80, only expire 50
+        const amountToExpire = balanceBefore.isNegative()
+          ? new Decimal(0)
+          : Decimal.min(expiredAmount, balanceBefore);
+
+        if (amountToExpire.isZero()) {
+          // Skip if nothing to expire
+          continue;
+        }
+
+        const balanceAfter = balanceBefore.sub(amountToExpire);
+
+        // Create expiry transaction
         await this.prisma.$transaction([
           this.prisma.wallet.update({
             where: { id: wallet.id },
@@ -371,17 +447,24 @@ export class WalletService {
             data: {
               walletId: wallet.id,
               type: WalletTransactionType.EXPIRE,
-              amount: expiredAmount.negated(),
+              amount: amountToExpire.negated(),
               balanceBefore,
               balanceAfter,
-              description: `Points expired`,
-              metadata: { expiredTransactionId: transaction.id },
+              description: `Points expired (${amountToExpire.toFixed(0)} pts)`,
+              metadata: {
+                expiredTransactionId: transaction.id,
+                originalAmount: expiredAmount.toNumber(),
+                partialExpiry: !amountToExpire.equals(expiredAmount),
+              },
             },
           }),
         ]);
+
+        currentBalance = balanceAfter;
+        processedCount++;
       }
     }
 
-    return { expiredCount: expiredTransactions.length };
+    return { expiredCount: processedCount };
   }
 }

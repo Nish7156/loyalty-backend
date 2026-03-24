@@ -78,6 +78,7 @@ export class CustomersService {
 
     const DEFAULT_REWARD_WINDOW_DAYS = 30;
     const DEFAULT_REWARD_DESCRIPTION = 'Free reward';
+    const DEFAULT_MINIMUM_REDEMPTION_POINTS = 50;
     const byBranch = new Map<
       string,
       {
@@ -91,6 +92,7 @@ export class CustomersService {
         rewardThreshold?: number;
         rewardWindowDays?: number;
         rewardDescription?: string;
+        minimumRedemptionPoints?: number;
       }
     >();
     for (const a of approvedActivities) {
@@ -102,6 +104,10 @@ export class CustomersService {
           typeof settings.rewardWindowDays === 'number' ? settings.rewardWindowDays : DEFAULT_REWARD_WINDOW_DAYS;
         const rewardDescription =
           typeof settings.rewardDescription === 'string' ? settings.rewardDescription : DEFAULT_REWARD_DESCRIPTION;
+        const minimumRedemptionPoints =
+          typeof settings.minimumRedemptionPoints === 'number'
+            ? settings.minimumRedemptionPoints
+            : DEFAULT_MINIMUM_REDEMPTION_POINTS;
         byBranch.set(key, {
           branchId: a.branch.id,
           branchName: a.branch.branchName,
@@ -113,6 +119,7 @@ export class CustomersService {
           rewardThreshold,
           rewardWindowDays,
           rewardDescription,
+          minimumRedemptionPoints,
         });
       }
       const row = byBranch.get(key)!;
@@ -127,6 +134,7 @@ export class CustomersService {
         lastVisitAt: store.lastVisitAt,
         streakCurrentCount: streak?.currentCount,
         streakLastActivityAt: streak?.lastActivityAt ?? null,
+        streakPeriodStartedAt: streak?.lastActivityAt ?? null, // Frontend expects this field name
       };
     });
 
