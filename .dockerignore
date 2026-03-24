@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+dist
+test
+.env
+Dockerfile
+docker-compose.yml
+.git
+.gitignore
+prisma/migrations
+prisma/seed.ts
+*.md
