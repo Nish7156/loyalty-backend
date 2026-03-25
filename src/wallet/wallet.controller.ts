@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiQuery } from '@nestjs/swagger';
 import { JwtCustomerAuthGuard } from '../auth/guards/jwt-customer.guard';
 import { WalletService } from './wallet.service';
@@ -18,7 +18,7 @@ export class WalletController {
   @UseGuards(JwtCustomerAuthGuard)
   async getBalance(
     @Req() req: { user: { phone: string } },
-    @Query('partnerId') partnerId: string,
+    @Param('partnerId') partnerId: string,
   ) {
     return this.walletService.getBalance(req.user.phone, partnerId);
   }

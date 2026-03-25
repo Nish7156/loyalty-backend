@@ -5,14 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const WALLET_ENABLED_KEY = 'walletEnabled';
 const POINTS_PERCENTAGE_KEY = 'pointsPercentage';
+const AMOUNT_PER_COIN_KEY = 'amountPerCoin';
 const POINTS_EXPIRY_DAYS_KEY = 'pointsExpiryDays';
 const POINTS_TO_REWARD_RATIO_KEY = 'pointsToRewardRatio';
-const MINIMUM_REDEMPTION_POINTS_KEY = 'minimumRedemptionPoints';
-
 const DEFAULT_POINTS_PERCENTAGE = 5;
 const DEFAULT_POINTS_EXPIRY_DAYS = 365;
 const DEFAULT_POINTS_TO_REWARD_RATIO = 100;
-const DEFAULT_MINIMUM_REDEMPTION_POINTS = 50;
 
 @Injectable()
 export class WalletService {
@@ -28,6 +26,12 @@ export class WalletService {
     return s && typeof s[POINTS_PERCENTAGE_KEY] === 'number' ? s[POINTS_PERCENTAGE_KEY] : DEFAULT_POINTS_PERCENTAGE;
   }
 
+  private getAmountPerCoin(branch: { settings?: Prisma.JsonValue }): number | null {
+    const s = branch.settings as Record<string, unknown> | null;
+    if (s && typeof s[AMOUNT_PER_COIN_KEY] === 'number' && s[AMOUNT_PER_COIN_KEY] > 0) return s[AMOUNT_PER_COIN_KEY];
+    return null;
+  }
+
   private getPointsExpiryDays(branch: { settings?: Prisma.JsonValue }): number {
     const s = branch.settings as Record<string, unknown> | null;
     return s && typeof s[POINTS_EXPIRY_DAYS_KEY] === 'number' ? s[POINTS_EXPIRY_DAYS_KEY] : DEFAULT_POINTS_EXPIRY_DAYS;
@@ -38,33 +42,21 @@ export class WalletService {
     return s && typeof s[POINTS_TO_REWARD_RATIO_KEY] === 'number' ? s[POINTS_TO_REWARD_RATIO_KEY] : DEFAULT_POINTS_TO_REWARD_RATIO;
   }
 
-  private getMinimumRedemptionPoints(branch: { settings?: Prisma.JsonValue }): number {
-    const s = branch.settings as Record<string, unknown> | null;
-    return s && typeof s[MINIMUM_REDEMPTION_POINTS_KEY] === 'number' ? s[MINIMUM_REDEMPTION_POINTS_KEY] : DEFAULT_MINIMUM_REDEMPTION_POINTS;
-  }
-
   async getOrCreateWallet(customerId: string, partnerId: string) {
-    let wallet = await this.prisma.wallet.findUnique({
+    return this.prisma.wallet.upsert({
       where: {
         customerId_partnerId: { customerId, partnerId },
       },
+      update: {},
+      create: {
+        customerId,
+        partnerId,
+        balance: new Decimal(0),
+        lifetimeEarned: new Decimal(0),
+        lifetimeSpent: new Decimal(0),
+      },
       include: { partner: true },
     });
-
-    if (!wallet) {
-      wallet = await this.prisma.wallet.create({
-        data: {
-          customerId,
-          partnerId,
-          balance: new Decimal(0),
-          lifetimeEarned: new Decimal(0),
-          lifetimeSpent: new Decimal(0),
-        },
-        include: { partner: true },
-      });
-    }
-
-    return wallet;
   }
 
   async addPoints(
@@ -224,38 +216,43 @@ export class WalletService {
       throw new BadRequestException('Wallet is not enabled for this branch');
     }
 
-    const wallet = await this.getOrCreateWallet(customerId, partnerId);
     const pointsToRewardRatio = this.getPointsToRewardRatio(branch);
-
-    const balance = Number(wallet.balance);
-    const rewardCount = Math.floor(balance / pointsToRewardRatio);
-
-    // Check if customer has enough points for at least 1 reward
-    if (rewardCount === 0) {
-      const pointsNeeded = pointsToRewardRatio - balance;
-      throw new BadRequestException(
-        `You need ${pointsToRewardRatio} points to redeem 1 reward. You have ${balance.toFixed(0)} points (${pointsNeeded.toFixed(0)} more needed).`,
-      );
-    }
-
-    const pointsToSpend = rewardCount * pointsToRewardRatio;
     const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    // Create PENDING rewards with redemption code AND deduct points immediately
+    // Everything inside one transaction to prevent concurrent double-spend
     const result = await this.prisma.$transaction(async (tx) => {
+      // Read balance INSIDE transaction for atomicity
+      const wallet = await tx.wallet.findUnique({
+        where: { customerId_partnerId: { customerId, partnerId } },
+      });
+
+      if (!wallet) {
+        throw new BadRequestException('No wallet found. Make a purchase first to earn coins.');
+      }
+
+      const balance = Number(wallet.balance);
+      const rewardCount = Math.floor(balance / pointsToRewardRatio);
+
+      if (rewardCount === 0) {
+        const pointsNeeded = pointsToRewardRatio - balance;
+        throw new BadRequestException(
+          `You need ${pointsToRewardRatio} coins to redeem 1 reward. You have ${balance.toFixed(0)} coins (${pointsNeeded.toFixed(0)} more needed).`,
+        );
+      }
+
+      const pointsToSpend = rewardCount * pointsToRewardRatio;
       const createdRewards: any[] = [];
 
-      // Deduct points first to prevent duplicate redemptions
       const pointsDecimal = new Decimal(pointsToSpend);
       const balanceBefore = wallet.balance;
       const balanceAfter = balanceBefore.sub(pointsDecimal);
 
       if (balanceAfter.isNegative()) {
-        throw new BadRequestException('Insufficient points balance');
+        throw new BadRequestException('Insufficient coins balance');
       }
 
-      // Update wallet balance
-      const updatedWallet = await tx.wallet.update({
+      // Deduct points atomically
+      await tx.wallet.update({
         where: { id: wallet.id },
         data: {
           balance: balanceAfter,
@@ -263,7 +260,6 @@ export class WalletService {
         },
       });
 
-      // Create wallet transaction for the spend
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
@@ -296,15 +292,15 @@ export class WalletService {
         createdRewards.push(reward);
       }
 
-      return { rewards: createdRewards, newBalance: Number(balanceAfter) };
+      return { rewards: createdRewards, newBalance: Number(balanceAfter), pointsToSpend, rewardCount };
     });
 
     return {
       success: true,
-      pointsToSpend: pointsToSpend,  // Points deducted immediately
-      rewardsCreated: rewardCount,
+      pointsSpent: result.pointsToSpend,
+      rewardsCreated: result.rewardCount,
       rewards: result.rewards,
-      remainingBalance: result.newBalance,  // Balance after deduction
+      remainingBalance: result.newBalance,
       message: 'Show redemption code(s) to staff for verification',
     };
   }
@@ -341,9 +337,18 @@ export class WalletService {
       return null;
     }
 
-    const pointsPercentage = this.getPointsPercentage(branch);
     const pointsExpiryDays = this.getPointsExpiryDays(branch);
-    const pointsEarned = (transactionValue * pointsPercentage) / 100;
+    const amountPerCoin = this.getAmountPerCoin(branch);
+
+    let pointsEarned: number;
+    if (amountPerCoin) {
+      // Coin-based: e.g. amountPerCoin=10, transaction=50 → 5 coins
+      pointsEarned = Math.floor(transactionValue / amountPerCoin);
+    } else {
+      // Legacy percentage-based fallback
+      const pointsPercentage = this.getPointsPercentage(branch);
+      pointsEarned = (transactionValue * pointsPercentage) / 100;
+    }
 
     if (pointsEarned <= 0) {
       return null;
@@ -353,8 +358,10 @@ export class WalletService {
       customerId,
       branch.partnerId,
       pointsEarned,
-      `Earned from ₹${transactionValue} purchase`,
-      { branchId, transactionValue },
+      amountPerCoin
+        ? `Earned ${pointsEarned} coin${pointsEarned !== 1 ? 's' : ''} from ₹${transactionValue} purchase (₹${amountPerCoin} = 1 coin)`
+        : `Earned from ₹${transactionValue} purchase`,
+      { branchId, transactionValue, amountPerCoin },
       pointsExpiryDays,
     );
 

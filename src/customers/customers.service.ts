@@ -93,6 +93,7 @@ export class CustomersService {
         rewardWindowDays?: number;
         rewardDescription?: string;
         minimumRedemptionPoints?: number;
+        amountPerCoin?: number;
       }
     >();
     for (const a of approvedActivities) {
@@ -108,6 +109,10 @@ export class CustomersService {
           typeof settings.minimumRedemptionPoints === 'number'
             ? settings.minimumRedemptionPoints
             : DEFAULT_MINIMUM_REDEMPTION_POINTS;
+        const amountPerCoin =
+          typeof settings.amountPerCoin === 'number' && settings.amountPerCoin > 0
+            ? settings.amountPerCoin
+            : undefined;
         byBranch.set(key, {
           branchId: a.branch.id,
           branchName: a.branch.branchName,
@@ -120,6 +125,7 @@ export class CustomersService {
           rewardWindowDays,
           rewardDescription,
           minimumRedemptionPoints,
+          amountPerCoin,
         });
       }
       const row = byBranch.get(key)!;

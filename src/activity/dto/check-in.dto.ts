@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { IndianPhoneTransform, IsIndianPhone } from '../../common/validators/indian-phone.validator';
 
 export class RequestLocationDto {
@@ -34,6 +34,7 @@ export class CheckInDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   value?: number;
 

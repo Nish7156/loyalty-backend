@@ -46,6 +46,10 @@ export class BranchesService {
       throw new BadRequestException('pointsPercentage must be between 0 and 100');
     }
 
+    if (settings.amountPerCoin !== undefined && settings.amountPerCoin <= 0) {
+      throw new BadRequestException('amountPerCoin must be greater than 0 (e.g. 10 means ₹10 = 1 coin)');
+    }
+
     if (settings.pointsExpiryDays !== undefined && settings.pointsExpiryDays <= 0) {
       throw new BadRequestException('pointsExpiryDays must be greater than 0');
     }

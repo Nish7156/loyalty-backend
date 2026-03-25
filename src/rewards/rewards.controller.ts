@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nest
 import { ApiBody, ApiTags } from '@nestjs/swagger';
 import { JwtCustomerAuthGuard } from '../auth/guards/jwt-customer.guard';
 import { JwtStaffAuthGuard } from '../auth/guards/jwt-staff.guard';
+import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
 import { RewardsService } from './rewards.service';
 
 @ApiTags('rewards')
@@ -10,13 +11,16 @@ export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
 
   @Get()
+  @UseGuards(JwtUserAuthGuard)
   findAll() {
     return this.rewardsService.findAll();
   }
 
   @Get('customer/:customerId')
-  findByCustomer(@Param('customerId') customerId: string) {
-    return this.rewardsService.findByCustomer(customerId);
+  @UseGuards(JwtCustomerAuthGuard)
+  findByCustomer(@Param('customerId') customerId: string, @Req() req: { user: { phone: string } }) {
+    // Customers can only view their own rewards
+    return this.rewardsService.findByCustomer(req.user.phone);
   }
 
   @Patch(':id/redeem')
@@ -39,6 +43,7 @@ export class RewardsController {
   }
 
   @Get(':id')
+  @UseGuards(JwtStaffAuthGuard)
   findOne(@Param('id') id: string) {
     return this.rewardsService.findOne(id);
   }

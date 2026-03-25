@@ -145,7 +145,7 @@ export class ActivityService {
     };
   }
 
-  async approveOrReject(activityId: string, status: 'APPROVED' | 'REJECTED', staffId: string, value?: number) {
+  async approveOrReject(activityId: string, status: 'APPROVED' | 'REJECTED', staffId: string, value?: number, staffBranchId?: string) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
       include: { branch: { include: { partner: true } }, customer: true },
@@ -155,12 +155,36 @@ export class ActivityService {
       throw new BadRequestException('Activity is not pending');
     }
 
+    // Verify staff belongs to the same branch (or same partner's branch)
+    if (staffBranchId && activity.branchId !== staffBranchId) {
+      const staffBranch = await this.prisma.branch.findUnique({ where: { id: staffBranchId } });
+      if (!staffBranch || staffBranch.partnerId !== activity.branch.partnerId) {
+        throw new BadRequestException('You can only approve activities for your store');
+      }
+    }
+
+    // Validate value override
+    if (value != null) {
+      if (value < 0) throw new BadRequestException('Amount cannot be negative');
+      if (value > 999999) throw new BadRequestException('Amount exceeds maximum allowed');
+      const minAmount = this.getMinCheckInAmount(activity.branch);
+      if (minAmount != null && value < minAmount) {
+        throw new BadRequestException(`Amount must be at least ${minAmount}`);
+      }
+    }
+
     if (status === ActivityStatus.REJECTED) {
-      return this.prisma.activity.update({
-        where: { id: activityId },
+      // Use updateMany with status filter to prevent race condition
+      const rejectResult = await this.prisma.activity.updateMany({
+        where: { id: activityId, status: ActivityStatus.PENDING },
         data: { status: ActivityStatus.REJECTED, staffId },
+      });
+      if (rejectResult.count === 0) throw new BadRequestException('Activity already processed');
+      const rejected = await this.prisma.activity.findUnique({
+        where: { id: activityId },
         include: { customer: true, branch: true },
       });
+      return rejected!;
     }
 
     const threshold = this.getStreakThreshold(activity.branch);
@@ -169,16 +193,22 @@ export class ActivityService {
     const loyaltyType = activity.branch.loyaltyType || 'VISITS';
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const updateData: { status: ActivityStatus; staffId: string; value?: Decimal } = {
-        status: ActivityStatus.APPROVED,
-        staffId,
-      };
-      if (value != null) updateData.value = new Decimal(value);
-      const updated = await tx.activity.update({
-        where: { id: activityId },
-        data: updateData,
-        include: { customer: true, branch: true },
+      // Atomic status check + update to prevent double-approval race condition
+      const updateResult = await tx.activity.updateMany({
+        where: { id: activityId, status: ActivityStatus.PENDING },
+        data: {
+          status: ActivityStatus.APPROVED,
+          staffId,
+          ...(value != null ? { value: new Decimal(value) } : {}),
+        },
       });
+      if (updateResult.count === 0) {
+        throw new BadRequestException('Activity already processed by another staff member');
+      }
+      const updated = (await tx.activity.findUnique({
+        where: { id: activityId },
+        include: { customer: true, branch: true },
+      }))!;
 
       let streak: { id: string; currentCount: number; lastActivityAt: Date | null } | null = null;
       let reward: { id: string; customerId: string; partnerId: string; status: string; expiryDate: Date | null; createdAt: Date } | null = null;
@@ -244,14 +274,18 @@ export class ActivityService {
     let walletResult: { pointsEarned: number; newBalance: number; partnerId: string; partnerName: string } | null = null;
     // Only process wallet points if loyalty type is POINTS or HYBRID
     if ((loyaltyType === 'POINTS' || loyaltyType === 'HYBRID') && result.activity.value && Number(result.activity.value) > 0) {
-      try {
-        walletResult = await this.walletService.processActivityApproval(
-          activity.customerId,
-          activity.branchId,
-          Number(result.activity.value),
-        );
-      } catch (error) {
-        console.error('Wallet points processing error:', error);
+      const txValue = Number(result.activity.value);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          walletResult = await this.walletService.processActivityApproval(
+            activity.customerId,
+            activity.branchId,
+            txValue,
+          );
+          break;
+        } catch (error) {
+          console.error(`Wallet points processing error (attempt ${attempt + 1}):`, error);
+        }
       }
     }
 

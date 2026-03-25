@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } fro
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { User } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
+import { JwtStaffAuthGuard } from '../auth/guards/jwt-staff.guard';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
@@ -30,6 +31,7 @@ export class BranchesController {
   }
 
   @Get(':id/activities')
+  @UseGuards(JwtStaffAuthGuard)
   getBranchActivities(@Param('id') id: string) {
     return this.activityService.findByBranchId(id);
   }
@@ -47,6 +49,8 @@ export class BranchesController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtUserAuthGuard)
+  @ApiBearerAuth()
   remove(@Param('id') id: string) {
     return this.branchesService.remove(id);
   }
