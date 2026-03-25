@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { JwtStaffPayload } from '../auth.service';
+import { JWT_SECRET } from '../jwt-secret';
 
 @Injectable()
 export class JwtStaffStrategy extends PassportStrategy(Strategy, 'jwt-staff') {
@@ -12,7 +13,7 @@ export class JwtStaffStrategy extends PassportStrategy(Strategy, 'jwt-staff') {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'streak-loyalty-secret-change-in-production',
+      secretOrKey: JWT_SECRET,
     });
   }
 

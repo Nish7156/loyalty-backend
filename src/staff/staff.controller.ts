@@ -7,12 +7,12 @@ import { UpdateStaffDto } from './dto/update-staff.dto';
 
 @ApiTags('staff')
 @Controller('staff')
+@UseGuards(JwtUserAuthGuard)
+@ApiBearerAuth()
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post()
-  @UseGuards(JwtUserAuthGuard)
-  @ApiBearerAuth()
   create(@Body() dto: CreateStaffDto, @Req() req: { user: { id: string; role: string; ownedPartners: { id: string }[] } }) {
     return this.staffService.create(dto, req.user);
   }

@@ -97,41 +97,39 @@ export class RewardsService {
     const trimmed = code?.trim()?.toUpperCase();
     if (!trimmed) throw new BadRequestException('Code is required');
 
-    const reward = await this.prisma.reward.findUnique({
-      where: { redemptionCode: trimmed },
-      include: {
-        partner: { include: { branches: true } },
-        customer: true,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const reward = await tx.reward.findUnique({
+        where: { redemptionCode: trimmed },
+        include: {
+          partner: { include: { branches: true } },
+          customer: true,
+        },
+      });
 
-    if (!reward) throw new NotFoundException('Invalid or expired code');
+      if (!reward) throw new NotFoundException('Invalid or expired code');
 
-    // Check expiry
-    if (reward.expiryDate && new Date() > reward.expiryDate) {
-      throw new BadRequestException('This reward has expired');
-    }
+      if (reward.expiryDate && new Date() > reward.expiryDate) {
+        throw new BadRequestException('This reward has expired');
+      }
 
-    if (reward.redemptionCompletedAt) {
-      throw new BadRequestException('Reward already claimed');
-    }
+      if (reward.redemptionCompletedAt) {
+        throw new BadRequestException('Reward already claimed');
+      }
 
-    // Verify staff can complete this reward
-    const branchIds = reward.partner.branches.map((b) => b.id);
-    if (!branchIds.includes(staffBranchId)) {
-      throw new BadRequestException('You cannot complete this reward at your branch');
-    }
+      const branchIds = reward.partner.branches.map((b) => b.id);
+      if (!branchIds.includes(staffBranchId)) {
+        throw new BadRequestException('You cannot complete this reward at your branch');
+      }
 
-    // Complete the reward - Points already deducted during redemption request
-    // Staff verification just confirms the reward was given to customer
-    return this.prisma.reward.update({
-      where: { id: reward.id },
-      data: {
-        status: 'REDEEMED',  // Mark as fully redeemed
-        redemptionCompletedAt: new Date(),  // When staff verified
-        redeemedBranchId: staffBranchId,  // Track which branch redeemed
-      },
-      include: { customer: true, partner: true, redeemedBranch: true },
+      return tx.reward.update({
+        where: { id: reward.id },
+        data: {
+          status: 'REDEEMED',
+          redemptionCompletedAt: new Date(),
+          redeemedBranchId: staffBranchId,
+        },
+        include: { customer: true, partner: true, redeemedBranch: true },
+      });
     });
   }
 }

@@ -8,13 +8,14 @@ import { JwtUserStrategy } from './strategies/jwt-user.strategy';
 import { JwtCustomerStrategy } from './strategies/jwt-customer.strategy';
 import { JwtCustomerAuthGuard } from './guards/jwt-customer.guard';
 import { Fast2smsModule } from '../fast2sms/fast2sms.module';
+import { JWT_SECRET } from './jwt-secret';
 
 @Module({
   imports: [
     Fast2smsModule,
     PassportModule.register({ defaultStrategy: 'jwt-staff' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'streak-loyalty-secret-change-in-production',
+      secret: JWT_SECRET,
       signOptions: { expiresIn: '7d' },
     }),
   ],

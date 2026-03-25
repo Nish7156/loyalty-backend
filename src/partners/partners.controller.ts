@@ -7,12 +7,12 @@ import { UpdatePartnerDto } from './dto/update-partner.dto';
 
 @ApiTags('partners')
 @Controller('partners')
+@UseGuards(JwtUserAuthGuard)
+@ApiBearerAuth()
 export class PartnersController {
   constructor(private readonly partnersService: PartnersService) {}
 
   @Post()
-  @UseGuards(JwtUserAuthGuard)
-  @ApiBearerAuth()
   create(@Body() dto: CreatePartnerDto) {
     return this.partnersService.create(dto);
   }

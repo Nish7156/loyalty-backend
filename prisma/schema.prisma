@@ -145,6 +145,8 @@ model Activity {
   @@index([staffId])
   @@index([createdAt])
   @@index([status])
+  @@index([branchId, status, createdAt])
+  @@index([customerId, status])
 }
 
 model Reward {
@@ -203,4 +205,5 @@ model WalletTransaction {
   @@index([walletId])
   @@index([createdAt])
   @@index([expiresAt])
+  @@index([walletId, type])
 }

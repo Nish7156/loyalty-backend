@@ -117,8 +117,8 @@ export class AuthService {
   }
 
   async loginWithOtp(phone: string, otp: string) {
-    // Hardcoded dev OTP: 1111 always accepted for any registered phone
-    if (otp === DEV_OTP) {
+    // Dev-only OTP bypass — strictly disabled in production
+    if (otp === DEV_OTP && process.env.NODE_ENV === 'development') {
       const user = await this.prisma.user.findFirst({ where: { phone } });
       if (user) return this.loginUserByPhone(phone);
       const staff = await this.prisma.staff.findFirst({ where: { phone } });
@@ -160,8 +160,8 @@ export class AuthService {
       throw new UnauthorizedException('OTP is required');
     }
 
-    // Hardcoded dev OTP: 1111 always accepted in non-production
-    if (otp === DEV_OTP && process.env.NODE_ENV !== 'production') {
+    // Dev-only OTP bypass — strictly disabled in production
+    if (otp === DEV_OTP && process.env.NODE_ENV === 'development') {
       this.logger.log(`Dev mode - accepting hardcoded OTP for ${phone}`);
       return this.loginCustomerByPhone(phone);
     }

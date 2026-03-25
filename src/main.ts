@@ -25,9 +25,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Allow all origins for now; set CORS_ORIGIN to a specific origin to restrict
+  const corsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL;
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? true,
+    origin: corsOrigin || (process.env.NODE_ENV === 'development' ? true : false),
     credentials: true,
   });
 
