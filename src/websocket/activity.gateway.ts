@@ -8,7 +8,7 @@ import {
 import { Server } from 'socket.io';
 
 @WebSocketGateway({
-  cors: { origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'development' ? '*' : '') },
+  cors: { origin: true },
   namespace: '/',
 })
 export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect {
