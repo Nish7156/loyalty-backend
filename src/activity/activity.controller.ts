@@ -4,6 +4,7 @@ import { Staff } from '@prisma/client';
 import { ActivityGateway } from '../websocket/activity.gateway';
 import { JwtStaffAuthGuard } from '../auth/guards/jwt-staff.guard';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user.guard';
+import { JwtUserOrStaffAuthGuard } from '../auth/guards/jwt-user-or-staff.guard';
 import { ActivityService } from './activity.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { UpdateActivityStatusDto } from './dto/update-activity-status.dto';
@@ -24,7 +25,7 @@ export class ActivityController {
   }
 
   @Get()
-  @UseGuards(JwtUserAuthGuard)
+  @UseGuards(JwtUserOrStaffAuthGuard)
   findAll() {
     return this.activityService.findAll();
   }
