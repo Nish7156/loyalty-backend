@@ -15,4 +15,9 @@ export class LoginWithOtpDto {
   @IsString()
   @IsOptional()
   otp?: string;
+
+  @ApiProperty({ example: 'John Doe', required: false, description: 'Customer name. Captured during first-time registration.' })
+  @IsString()
+  @IsOptional()
+  name?: string;
 }

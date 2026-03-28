@@ -108,7 +108,8 @@ export class AuthService {
       this.logger.warn(`Phone number ${phone} is too short (${numberForSms.length} digits), skipping SMS`);
     }
 
-    const res: { success: true; otp?: string } = { success: true };
+    const existing = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
+    const res: { success: true; otp?: string; isNew?: boolean } = { success: true, isNew: !existing };
     if (process.env.NODE_ENV !== 'production') {
       res.otp = code;
       this.logger.debug(`Dev mode - OTP for ${phone}: ${code}`);
@@ -144,7 +145,7 @@ export class AuthService {
     return this.loginStaffByPhone(phone);
   }
 
-  async loginCustomer(phone: string, otp?: string) {
+  async loginCustomer(phone: string, otp?: string, name?: string) {
     this.logger.log(`loginCustomer called for phone: ${phone}, OTP provided: ${!!otp}`);
 
     // Check if customer is already verified - allow direct login without OTP
@@ -163,7 +164,7 @@ export class AuthService {
     // Dev-only OTP bypass — strictly disabled in production
     if (otp === DEV_OTP && process.env.NODE_ENV === 'development') {
       this.logger.log(`Dev mode - accepting hardcoded OTP for ${phone}`);
-      return this.loginCustomerByPhone(phone);
+      return this.loginCustomerByPhone(phone, name);
     }
 
     const record = getOtp(phone);
@@ -182,19 +183,20 @@ export class AuthService {
       throw new UnauthorizedException('Invalid OTP for customer');
     }
     this.logger.log(`OTP verified successfully for new customer ${phone}`);
-    return this.loginCustomerByPhone(phone);
+    return this.loginCustomerByPhone(phone, name);
   }
 
   async issueCustomerToken(phone: string): Promise<{ access_token: string; customer: { phone: string } }> {
     return this.loginCustomerByPhone(phone);
   }
 
-  private async loginCustomerByPhone(phone: string) {
+  private async loginCustomerByPhone(phone: string, name?: string) {
+    const trimmedName = name?.trim().slice(0, 200) || undefined;
     // Mark customer as verified on first successful login
     const customer = await this.prisma.customer.upsert({
       where: { phoneNumber: phone },
-      create: { phoneNumber: phone, isVerified: true },
-      update: { isVerified: true },
+      create: { phoneNumber: phone, isVerified: true, ...(trimmedName && { name: trimmedName }) },
+      update: { isVerified: true, ...(trimmedName && { name: trimmedName }) },
     });
     this.logger.log(`Customer ${phone} logged in successfully, verified status: ${customer.isVerified}`);
     const payload: JwtCustomerPayload = { phone, type: 'customer' };
