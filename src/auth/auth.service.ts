@@ -109,7 +109,7 @@ export class AuthService {
     }
 
     const existing = await this.prisma.customer.findFirst({ where: { phoneNumber: phone } });
-    const res: { success: true; otp?: string; isNew?: boolean } = { success: true, isNew: !existing };
+    const res: { success: true; otp?: string; needsName?: boolean } = { success: true, needsName: !existing || !existing.name };
     if (process.env.NODE_ENV !== 'production') {
       res.otp = code;
       this.logger.debug(`Dev mode - OTP for ${phone}: ${code}`);
