@@ -8,11 +8,53 @@ export interface PushPayload {
   body: string;
   icon?: string;
   badge?: string;
+  image?: string;
   tag?: string;
   url?: string;
   type?: string;
   partnerId?: string;
+  requireInteraction?: boolean;
+  actions?: { action: string; title: string }[];
 }
+
+// Per-type notification config: vibrate pattern, requireInteraction, action buttons
+const TYPE_CONFIG: Record<string, {
+  vibrate: number[];
+  requireInteraction: boolean;
+  actions: { action: string; title: string }[];
+}> = {
+  CHECKIN_APPROVED: {
+    vibrate: [100, 50, 100, 50, 200],
+    requireInteraction: false,
+    actions: [{ action: 'view', title: '🎯 View progress' }],
+  },
+  REWARD_EARNED: {
+    vibrate: [200, 100, 200, 100, 400],
+    requireInteraction: true,
+    actions: [
+      { action: 'redeem', title: '🎁 Redeem now' },
+      { action: 'later', title: 'Later' },
+    ],
+  },
+  REWARD_EXPIRING: {
+    vibrate: [300, 100, 300],
+    requireInteraction: true,
+    actions: [
+      { action: 'redeem', title: '⚡ Use before it expires' },
+      { action: 'dismiss', title: 'Dismiss' },
+    ],
+  },
+  POINTS_EARNED: {
+    vibrate: [80, 40, 80],
+    requireInteraction: false,
+    actions: [{ action: 'wallet', title: '💰 View wallet' }],
+  },
+  PROMOTION: {
+    vibrate: [100, 50, 100],
+    requireInteraction: false,
+    actions: [{ action: 'view', title: '✨ See offer' }],
+  },
+};
 
 @Injectable()
 export class PushService implements OnModuleInit {
@@ -66,15 +108,24 @@ export class PushService implements OnModuleInit {
 
     if (subscriptions.length === 0) return 0;
 
+    const type = payload.type ?? 'GENERIC';
+    const cfg = TYPE_CONFIG[type];
+
     const notification = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      icon: payload.icon ?? '/icons/icon-192x192.png',
-      badge: payload.badge ?? '/icons/badge-72x72.png',
-      tag: payload.tag ?? 'loyalty-notification',
+      icon: payload.icon ?? '/icon-192.png',
+      badge: payload.badge ?? '/badge-72.png',
+      image: payload.image,
+      tag: payload.tag ?? `loyalty-${type.toLowerCase()}`,
+      renotify: true,
+      timestamp: Date.now(),
+      vibrate: cfg?.vibrate ?? [100, 50, 100],
+      requireInteraction: payload.requireInteraction ?? cfg?.requireInteraction ?? false,
+      actions: payload.actions ?? cfg?.actions ?? [],
       data: {
         url: payload.url ?? '/',
-        type: payload.type ?? 'GENERIC',
+        type,
         partnerId: payload.partnerId,
       },
     });
