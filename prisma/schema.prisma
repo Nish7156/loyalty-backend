@@ -91,14 +91,27 @@ model Staff {
 }
 
 model Customer {
-  phoneNumber String     @id
-  name        String?
-  isVerified  Boolean    @default(false)
-  streaks     Streak[]
-  activities  Activity[]
-  rewards     Reward[]
-  feedbacks   Feedback[]
-  wallets     Wallet[]
+  phoneNumber        String             @id
+  name               String?
+  isVerified         Boolean            @default(false)
+  streaks            Streak[]
+  activities         Activity[]
+  rewards            Reward[]
+  feedbacks          Feedback[]
+  wallets            Wallet[]
+  pushSubscriptions  PushSubscription[]
+}
+
+model PushSubscription {
+  id         String   @id @default(uuid())
+  customerId String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+
+  @@index([customerId])
 }
 
 model Feedback {

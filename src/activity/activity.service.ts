@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_COOLDOWN_HOURS } from '../common/constants';
 import { CustomersService } from '../customers/customers.service';
 import { WalletService } from '../wallet/wallet.service';
+import { PushService } from '../push/push.service';
 import { CheckInDto } from './dto/check-in.dto';
 
 const COOLDOWN_HOURS_KEY = 'cooldownHours';
@@ -25,6 +26,7 @@ export class ActivityService {
     private readonly prisma: PrismaService,
     private readonly customersService: CustomersService,
     private readonly walletService: WalletService,
+    private readonly pushService: PushService,
   ) {}
 
   /** Cooldown in minutes. Reads cooldownMinutes, else cooldownHours * 60, else default. Capped at 48h. */
@@ -289,6 +291,19 @@ export class ActivityService {
       }
     }
 
+    const partnerName = activity.branch.partner.businessName;
+    const branchName = activity.branch.branchName;
+
+    // Fire push notifications (non-blocking — never let push failures break approval)
+    this.sendApprovalPushNotifications(
+      activity.customerId,
+      partnerName,
+      branchName,
+      result.streak,
+      result.reward,
+      walletResult,
+    ).catch(() => {});
+
     return {
       ...result.activity,
       value: result.activity.value ? Number(result.activity.value) : null,
@@ -297,6 +312,48 @@ export class ActivityService {
       reward: result.reward,
       walletPoints: walletResult,
     };
+  }
+
+  private async sendApprovalPushNotifications(
+    customerId: string,
+    partnerName: string,
+    branchName: string,
+    streak: { currentCount: number } | null,
+    reward: { id: string } | null,
+    walletResult: { pointsEarned: number; newBalance: number } | null,
+  ): Promise<void> {
+    // Check-in approved notification
+    const visitLine = streak ? `Visit #${streak.currentCount} recorded` : 'Visit recorded';
+    const pointsLine = walletResult ? ` · +${Math.round(walletResult.pointsEarned)} pts` : '';
+    await this.pushService.sendToCustomer(customerId, {
+      title: `Check-in approved at ${branchName}`,
+      body: `${visitLine}${pointsLine}. Keep it up!`,
+      tag: `checkin-approved-${customerId}`,
+      url: '/history',
+      type: 'CHECKIN_APPROVED',
+    });
+
+    // Reward earned notification (separate, more prominent)
+    if (reward) {
+      await this.pushService.sendToCustomer(customerId, {
+        title: 'You earned a reward!',
+        body: `Congratulations! You've earned a free reward at ${partnerName}. Tap to view.`,
+        tag: `reward-earned-${reward.id}`,
+        url: '/rewards',
+        type: 'REWARD_EARNED',
+      });
+    }
+
+    // Points earned notification (only if no reward this visit, avoid notification overload)
+    if (walletResult && !reward) {
+      await this.pushService.sendToCustomer(customerId, {
+        title: `+${Math.round(walletResult.pointsEarned)} points earned`,
+        body: `Your ${partnerName} wallet balance: ${Math.round(walletResult.newBalance)} pts`,
+        tag: `points-earned-${customerId}`,
+        url: '/wallet',
+        type: 'POINTS_EARNED',
+      });
+    }
   }
 
   async findAll(args?: Prisma.ActivityFindManyArgs) {

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -13,9 +14,11 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { Fast2smsModule } from './fast2sms/fast2sms.module';
 import { WalletModule } from './wallet/wallet.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     PartnersModule,
@@ -28,6 +31,7 @@ import { WalletModule } from './wallet/wallet.module';
     FeedbackModule,
     Fast2smsModule,
     WalletModule,
+    PushModule,
   ],
   controllers: [AppController],
   providers: [AppService],
