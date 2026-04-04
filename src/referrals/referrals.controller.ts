@@ -22,8 +22,8 @@ export class ReferralsController {
   @UseGuards(JwtCustomerAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get or generate customer referral code' })
-  async getMyCode(@Request() req: { user: { phoneNumber: string } }) {
-    const code = await this.referralsService.getOrCreateCode(req.user.phoneNumber);
+  async getMyCode(@Request() req: { user: { phone: string } }) {
+    const code = await this.referralsService.getOrCreateCode(req.user.phone);
     return { code };
   }
 
@@ -31,16 +31,16 @@ export class ReferralsController {
   @UseGuards(JwtCustomerAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get referral stats (pending, completed, total bonus)' })
-  async getMyStats(@Request() req: { user: { phoneNumber: string } }) {
-    return this.referralsService.getStats(req.user.phoneNumber);
+  async getMyStats(@Request() req: { user: { phone: string } }) {
+    return this.referralsService.getStats(req.user.phone);
   }
 
   @Get('my-list')
   @UseGuards(JwtCustomerAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List people referred (masked phone + status)' })
-  async getMyList(@Request() req: { user: { phoneNumber: string } }) {
-    return this.referralsService.getList(req.user.phoneNumber);
+  async getMyList(@Request() req: { user: { phone: string } }) {
+    return this.referralsService.getList(req.user.phone);
   }
 
   @Post('apply')
