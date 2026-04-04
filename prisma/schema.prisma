@@ -94,12 +94,38 @@ model Customer {
   phoneNumber        String             @id
   name               String?
   isVerified         Boolean            @default(false)
+  referralCode       String?            @unique
+  referredBy         String?
   streaks            Streak[]
   activities         Activity[]
   rewards            Reward[]
   feedbacks          Feedback[]
   wallets            Wallet[]
   pushSubscriptions  PushSubscription[]
+  referrals          Referral[]         @relation("ReferrerReferrals")
+  referredVia        Referral?          @relation("ReferredReferrals")
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
+model Referral {
+  id           String         @id @default(uuid())
+  referrerId   String
+  referredId   String         @unique
+  status       ReferralStatus @default(PENDING)
+  partnerId    String?
+  bonusAwarded Decimal?       @db.Decimal(10, 2)
+  createdAt    DateTime       @default(now())
+  completedAt  DateTime?
+  referrer     Customer       @relation("ReferrerReferrals", fields: [referrerId], references: [phoneNumber], onDelete: Cascade)
+  referred     Customer       @relation("ReferredReferrals", fields: [referredId], references: [phoneNumber], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@index([status])
 }
 
 model PushSubscription {

@@ -5,9 +5,10 @@ import { CustomersModule } from '../customers/customers.module';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { PushModule } from '../push/push.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
-  imports: [CustomersModule, WebsocketModule, WalletModule, PushModule],
+  imports: [CustomersModule, WebsocketModule, WalletModule, PushModule, ReferralsModule],
   controllers: [ActivityController],
   providers: [ActivityService],
   exports: [ActivityService],

@@ -8,9 +8,11 @@ const POINTS_PERCENTAGE_KEY = 'pointsPercentage';
 const AMOUNT_PER_COIN_KEY = 'amountPerCoin';
 const POINTS_EXPIRY_DAYS_KEY = 'pointsExpiryDays';
 const POINTS_TO_REWARD_RATIO_KEY = 'pointsToRewardRatio';
+const REWARD_WINDOW_DAYS_KEY = 'rewardWindowDays';
 const DEFAULT_POINTS_PERCENTAGE = 5;
 const DEFAULT_POINTS_EXPIRY_DAYS = 365;
 const DEFAULT_POINTS_TO_REWARD_RATIO = 100;
+const DEFAULT_REWARD_WINDOW_DAYS = 30;
 
 @Injectable()
 export class WalletService {
@@ -35,6 +37,11 @@ export class WalletService {
   private getPointsExpiryDays(branch: { settings?: Prisma.JsonValue }): number {
     const s = branch.settings as Record<string, unknown> | null;
     return s && typeof s[POINTS_EXPIRY_DAYS_KEY] === 'number' ? s[POINTS_EXPIRY_DAYS_KEY] : DEFAULT_POINTS_EXPIRY_DAYS;
+  }
+
+  private getRewardWindowDays(branch: { settings?: Prisma.JsonValue }): number {
+    const s = branch.settings as Record<string, unknown> | null;
+    return s && typeof s[REWARD_WINDOW_DAYS_KEY] === 'number' ? (s[REWARD_WINDOW_DAYS_KEY] as number) : DEFAULT_REWARD_WINDOW_DAYS;
   }
 
   private getPointsToRewardRatio(branch: { settings?: Prisma.JsonValue }): number {
@@ -217,7 +224,8 @@ export class WalletService {
     }
 
     const pointsToRewardRatio = this.getPointsToRewardRatio(branch);
-    const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const rewardWindowDays = this.getRewardWindowDays(branch);
+    const expiry = new Date(Date.now() + rewardWindowDays * 24 * 60 * 60 * 1000);
 
     // Everything inside one transaction to prevent concurrent double-spend
     const result = await this.prisma.$transaction(async (tx) => {

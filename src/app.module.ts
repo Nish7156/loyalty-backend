@@ -15,6 +15,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { Fast2smsModule } from './fast2sms/fast2sms.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PushModule } from './push/push.module';
+import { ReferralsModule } from './referrals/referrals.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PushModule } from './push/push.module';
     Fast2smsModule,
     WalletModule,
     PushModule,
+    ReferralsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

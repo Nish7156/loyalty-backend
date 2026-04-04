@@ -199,9 +199,28 @@ export class AuthService {
       update: { isVerified: true, ...(trimmedName && { name: trimmedName }) },
     });
     this.logger.log(`Customer ${phone} logged in successfully, verified status: ${customer.isVerified}`);
+
+    // Generate referral code on first login (if not already set)
+    if (!customer.referralCode) {
+      this.generateReferralCode(phone).catch(() => {});
+    }
+
     const payload: JwtCustomerPayload = { phone, type: 'customer' };
     const token = this.jwtService.sign(payload, { expiresIn: '3650d' });
     return { access_token: token, customer: { phone } };
+  }
+
+  private async generateReferralCode(phone: string): Promise<void> {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let attempts = 0;
+    let code: string;
+    do {
+      code = Array.from({ length: 6 }, () => charset[Math.floor(Math.random() * charset.length)]).join('');
+      attempts++;
+      if (attempts > 20) return;
+    } while (await this.prisma.customer.findUnique({ where: { referralCode: code } }));
+
+    await this.prisma.customer.update({ where: { phoneNumber: phone }, data: { referralCode: code } });
   }
 
   private async loginUserByPhone(phone: string) {

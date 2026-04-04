@@ -6,6 +6,7 @@ import { DEFAULT_COOLDOWN_HOURS } from '../common/constants';
 import { CustomersService } from '../customers/customers.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PushService } from '../push/push.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { CheckInDto } from './dto/check-in.dto';
 
 const COOLDOWN_HOURS_KEY = 'cooldownHours';
@@ -27,6 +28,7 @@ export class ActivityService {
     private readonly customersService: CustomersService,
     private readonly walletService: WalletService,
     private readonly pushService: PushService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   /** Cooldown in minutes. Reads cooldownMinutes, else cooldownHours * 60, else default. Capped at 48h. */
@@ -254,7 +256,7 @@ export class ActivityService {
 
         if (streak.currentCount >= threshold) {
           const expiry = new Date(serverNow.getTime());
-          expiry.setDate(expiry.getDate() + 30);
+          expiry.setDate(expiry.getDate() + windowDays);
           reward = await tx.reward.create({
             data: {
               customerId: activity.customerId,
@@ -303,6 +305,18 @@ export class ActivityService {
       result.reward,
       walletResult,
     ).catch(() => {});
+
+    // Complete referral on first-ever approved check-in (non-blocking)
+    this.prisma.activity
+      .count({ where: { customerId: activity.customerId, status: 'APPROVED' } })
+      .then((count) => {
+        if (count === 1) {
+          this.referralsService
+            .completeReferral(activity.customerId, activity.branch.partnerId)
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
 
     return {
       ...result.activity,
