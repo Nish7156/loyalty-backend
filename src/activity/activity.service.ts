@@ -306,16 +306,10 @@ export class ActivityService {
       walletResult,
     ).catch(() => {});
 
-    // Complete referral on first-ever approved check-in (non-blocking)
-    this.prisma.activity
-      .count({ where: { customerId: activity.customerId, status: 'APPROVED' } })
-      .then((count) => {
-        if (count === 1) {
-          this.referralsService
-            .completeReferral(activity.customerId, activity.branch.partnerId)
-            .catch(() => {});
-        }
-      })
+    // Complete referral on any approved check-in — completeReferral is idempotent
+    // (it checks for a PENDING referral internally and no-ops if none exists or already completed)
+    this.referralsService
+      .completeReferral(activity.customerId, activity.branch.partnerId)
       .catch(() => {});
 
     return {
