@@ -93,6 +93,7 @@ export class CustomersService {
         rewardWindowDays?: number;
         rewardDescription?: string;
         minimumRedemptionPoints?: number;
+        pointsToRewardRatio?: number;
         amountPerCoin?: number;
       }
     >();
@@ -109,6 +110,10 @@ export class CustomersService {
           typeof settings.minimumRedemptionPoints === 'number'
             ? settings.minimumRedemptionPoints
             : DEFAULT_MINIMUM_REDEMPTION_POINTS;
+        const pointsToRewardRatio =
+          typeof settings.pointsToRewardRatio === 'number' && settings.pointsToRewardRatio > 0
+            ? settings.pointsToRewardRatio
+            : 100;
         const amountPerCoin =
           typeof settings.amountPerCoin === 'number' && settings.amountPerCoin > 0
             ? settings.amountPerCoin
@@ -125,6 +130,7 @@ export class CustomersService {
           rewardWindowDays,
           rewardDescription,
           minimumRedemptionPoints,
+          pointsToRewardRatio,
           amountPerCoin,
         });
       }
