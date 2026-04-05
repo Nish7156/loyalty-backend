@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { PlatformWalletService } from '../platform-wallet/platform-wallet.service';
+import { ActivityGateway } from '../websocket/activity.gateway';
 
 // Referral bonuses are funded by the loyalty platform — NOT the shop owner
 const REFERRAL_BONUS_REFERRER = 100; // platform coins awarded to the person who shared
@@ -29,6 +30,7 @@ export class ReferralsService {
     private readonly prisma: PrismaService,
     private readonly pushService: PushService,
     private readonly platformWallet: PlatformWalletService,
+    private readonly gateway: ActivityGateway,
   ) {}
 
   async getOrCreateCode(customerPhone: string): Promise<string> {
@@ -150,7 +152,7 @@ export class ReferralsService {
 
     // Award platform coins to referrer (100) and referred (50)
     // These come from the loyalty platform budget — the shop owner is not charged
-    await Promise.all([
+    const [referrerWallet, referredWallet] = await Promise.all([
       this.platformWallet.earn(
         referral.referrerId,
         REFERRAL_BONUS_REFERRER,
@@ -164,6 +166,16 @@ export class ReferralsService {
         { referrerId: referral.referrerId, referralId: referral.id },
       ),
     ]);
+
+    // Notify both parties in real-time via WebSocket (non-blocking)
+    this.gateway.emitPlatformWalletUpdated(referral.referrerId, {
+      balance: Number(referrerWallet.balance),
+      reason: 'referral_bonus',
+    });
+    this.gateway.emitPlatformWalletUpdated(referredPhone, {
+      balance: Number(referredWallet.balance),
+      reason: 'welcome_bonus',
+    });
 
     // Mark referral as completed
     await this.prisma.referral.update({

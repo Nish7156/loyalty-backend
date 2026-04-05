@@ -19,7 +19,7 @@ export class PlatformWalletService {
     });
   }
 
-  async earn(customerId: string, amount: number, description: string, metadata?: Record<string, string>) {
+  async earn(customerId: string, amount: number, description: string, metadata?: Record<string, string>): Promise<{ balance: Decimal }> {
     const wallet = await this.getOrCreate(customerId);
     const amountDecimal = new Decimal(amount);
     const balanceBefore = new Decimal(wallet.balance);
@@ -45,6 +45,8 @@ export class PlatformWalletService {
         },
       }),
     ]);
+
+    return { balance: balanceAfter };
   }
 
   async getBalance(customerId: string): Promise<{ balance: number; lifetimeEarned: number; lifetimeSpent: number }> {

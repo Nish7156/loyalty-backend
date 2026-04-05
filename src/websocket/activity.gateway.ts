@@ -58,4 +58,8 @@ export class ActivityGateway implements OnGatewayConnection, OnGatewayDisconnect
   emitCheckinUpdatedToCustomer(customerId: string, payload: { id: string; status: string }): void {
     this.server.to(this.getCustomerRoomName(customerId)).emit('checkin_updated', payload);
   }
+
+  emitPlatformWalletUpdated(customerId: string, payload: { balance: number; reason: string }): void {
+    this.server.to(this.getCustomerRoomName(customerId)).emit('platform_wallet_updated', payload);
+  }
 }
