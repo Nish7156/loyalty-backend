@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, Inject, forwardRef 
 import { Customer, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { PlatformWalletService } from '../platform-wallet/platform-wallet.service';
 import { getOtp, getAndClearOtp } from '../auth/otp.store';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 
@@ -11,6 +12,7 @@ export class CustomersService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
+    private readonly platformWalletService: PlatformWalletService,
   ) {}
 
   async findOrCreate(phoneNumber: string): Promise<Customer> {
@@ -57,7 +59,7 @@ export class CustomersService {
 
   async getProfileByPhone(phoneNumber: string) {
     // Parallel fetch for better performance
-    const [customer, approvedActivities, walletBalances] = await Promise.all([
+    const [customer, approvedActivities, walletBalances, platformWallet] = await Promise.all([
       this.prisma.customer.findUnique({
         where: { phoneNumber },
         include: {
@@ -72,6 +74,7 @@ export class CustomersService {
         take: 100, // Limit to last 100 activities for performance
       }),
       this.walletService.getAllBalances(phoneNumber),
+      this.platformWalletService.getBalance(phoneNumber),
     ]);
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -159,6 +162,7 @@ export class CustomersService {
       },
       storesVisited,
       wallets: walletBalances,
+      platformWallet,
     };
   }
 

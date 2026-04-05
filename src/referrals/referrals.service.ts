@@ -4,12 +4,13 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { PlatformWalletService } from '../platform-wallet/platform-wallet.service';
 
-const REFERRAL_BONUS_REFERRER = 100;
-const REFERRAL_BONUS_REFERRED = 50;
+// Referral bonuses are funded by the loyalty platform — NOT the shop owner
+const REFERRAL_BONUS_REFERRER = 100; // platform coins awarded to the person who shared
+const REFERRAL_BONUS_REFERRED = 50;  // platform coins awarded to the new user who signed up
 const REFERRAL_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function generateCode(): string {
@@ -27,6 +28,7 @@ export class ReferralsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pushService: PushService,
+    private readonly platformWallet: PlatformWalletService,
   ) {}
 
   async getOrCreateCode(customerPhone: string): Promise<string> {
@@ -57,7 +59,7 @@ export class ReferralsService {
   }
 
   async getStats(customerPhone: string) {
-    const [pending, completed, bonusAgg] = await Promise.all([
+    const [pending, completed, bonusAgg, platformBalance] = await Promise.all([
       this.prisma.referral.count({
         where: { referrerId: customerPhone, status: 'PENDING' },
       }),
@@ -68,6 +70,7 @@ export class ReferralsService {
         where: { referrerId: customerPhone, status: 'COMPLETED' },
         _sum: { bonusAwarded: true },
       }),
+      this.platformWallet.getBalance(customerPhone),
     ]);
 
     return {
@@ -75,6 +78,7 @@ export class ReferralsService {
       completed,
       total: pending + completed,
       totalBonus: Number(bonusAgg._sum.bonusAwarded ?? 0),
+      platformBalance: platformBalance.balance,
     };
   }
 
@@ -133,137 +137,59 @@ export class ReferralsService {
     ]);
   }
 
-  async completeReferral(referredPhone: string, partnerId: string): Promise<void> {
+  /**
+   * Called after a referred customer's FIRST ever approved check-in.
+   * Awards platform coins to both parties — charged to the loyalty platform, NOT the shop owner.
+   */
+  async completeReferral(referredPhone: string, _partnerId: string): Promise<void> {
     const referral = await this.prisma.referral.findUnique({
       where: { referredId: referredPhone },
     });
 
     if (!referral || referral.status !== 'PENDING') return;
 
-    const branch = await this.prisma.branch.findFirst({
-      where: { partnerId },
-      select: { loyaltyType: true },
+    // Award platform coins to referrer (100) and referred (50)
+    // These come from the loyalty platform budget — the shop owner is not charged
+    await Promise.all([
+      this.platformWallet.earn(
+        referral.referrerId,
+        REFERRAL_BONUS_REFERRER,
+        'Referral bonus — your friend signed up',
+        { referredId: referredPhone, referralId: referral.id },
+      ),
+      this.platformWallet.earn(
+        referredPhone,
+        REFERRAL_BONUS_REFERRED,
+        'Welcome bonus — joined via referral',
+        { referrerId: referral.referrerId, referralId: referral.id },
+      ),
+    ]);
+
+    // Mark referral as completed
+    await this.prisma.referral.update({
+      where: { id: referral.id },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        bonusAwarded: REFERRAL_BONUS_REFERRER,
+      },
     });
-
-    const isVisitsOnly = branch?.loyaltyType === 'VISITS';
-
-    if (isVisitsOnly) {
-      // Award 1 free streak increment to referrer at this partner
-      await this.prisma.$transaction([
-        this.prisma.streak.upsert({
-          where: { customerId_partnerId: { customerId: referral.referrerId, partnerId } },
-          create: { customerId: referral.referrerId, partnerId, currentCount: 1 },
-          update: { currentCount: { increment: 1 } },
-        }),
-        this.prisma.referral.update({
-          where: { id: referral.id },
-          data: {
-            status: 'COMPLETED',
-            completedAt: new Date(),
-            partnerId,
-            bonusAwarded: REFERRAL_BONUS_REFERRER,
-          },
-        }),
-      ]);
-    } else {
-      // Award wallet points to referrer and referred
-      await this.awardWalletBonus(referral.referrerId, referredPhone, partnerId, referral.id);
-    }
 
     // Send push notifications (non-blocking)
     this.sendReferralNotifications(referral.referrerId, referredPhone).catch(() => {});
-  }
-
-  private async awardWalletBonus(
-    referrerId: string,
-    referredId: string,
-    partnerId: string,
-    referralId: string,
-  ) {
-    const now = new Date();
-
-    const zero = new Decimal(0);
-
-    // Referrer wallet
-    const referrerWallet = await this.prisma.wallet.upsert({
-      where: { customerId_partnerId: { customerId: referrerId, partnerId } },
-      create: { customerId: referrerId, partnerId, balance: zero, lifetimeEarned: zero, lifetimeSpent: zero },
-      update: {},
-    });
-
-    // Referred wallet
-    const referredWallet = await this.prisma.wallet.upsert({
-      where: { customerId_partnerId: { customerId: referredId, partnerId } },
-      create: { customerId: referredId, partnerId, balance: zero, lifetimeEarned: zero, lifetimeSpent: zero },
-      update: {},
-    });
-
-    const referrerBalanceBefore = new Decimal(referrerWallet.balance);
-    const referredBalanceBefore = new Decimal(referredWallet.balance);
-    const referrerBonusDecimal = new Decimal(REFERRAL_BONUS_REFERRER);
-    const referredBonusDecimal = new Decimal(REFERRAL_BONUS_REFERRED);
-
-    await this.prisma.$transaction([
-      // Referrer: earn 100 points
-      this.prisma.wallet.update({
-        where: { id: referrerWallet.id },
-        data: {
-          balance: referrerBalanceBefore.add(referrerBonusDecimal),
-          lifetimeEarned: new Decimal(referrerWallet.lifetimeEarned).add(referrerBonusDecimal),
-        },
-      }),
-      this.prisma.walletTransaction.create({
-        data: {
-          walletId: referrerWallet.id,
-          type: 'EARN',
-          amount: referrerBonusDecimal,
-          balanceBefore: referrerBalanceBefore,
-          balanceAfter: referrerBalanceBefore.add(referrerBonusDecimal),
-          description: `Referral bonus — friend signed up`,
-        },
-      }),
-      // Referred: earn 50 welcome points
-      this.prisma.wallet.update({
-        where: { id: referredWallet.id },
-        data: {
-          balance: referredBalanceBefore.add(referredBonusDecimal),
-          lifetimeEarned: new Decimal(referredWallet.lifetimeEarned).add(referredBonusDecimal),
-        },
-      }),
-      this.prisma.walletTransaction.create({
-        data: {
-          walletId: referredWallet.id,
-          type: 'EARN',
-          amount: referredBonusDecimal,
-          balanceBefore: referredBalanceBefore,
-          balanceAfter: referredBalanceBefore.add(referredBonusDecimal),
-          description: `Welcome bonus — joined via referral`,
-        },
-      }),
-      // Mark referral completed
-      this.prisma.referral.update({
-        where: { id: referralId },
-        data: {
-          status: 'COMPLETED',
-          completedAt: now,
-          partnerId,
-          bonusAwarded: REFERRAL_BONUS_REFERRER,
-        },
-      }),
-    ]);
   }
 
   private async sendReferralNotifications(referrerId: string, referredId: string) {
     await Promise.allSettled([
       this.pushService.sendToCustomer(referrerId, {
         title: 'Referral bonus earned!',
-        body: `Your friend just checked in for the first time. You earned ${REFERRAL_BONUS_REFERRER} bonus points!`,
+        body: `Your friend just checked in for the first time. You earned ${REFERRAL_BONUS_REFERRER} platform coins!`,
         type: 'POINTS_EARNED',
         tag: 'referral-bonus',
       }),
       this.pushService.sendToCustomer(referredId, {
         title: 'Welcome bonus!',
-        body: `Welcome! You've earned ${REFERRAL_BONUS_REFERRED} bonus points for joining via referral.`,
+        body: `Welcome! You've earned ${REFERRAL_BONUS_REFERRED} platform coins for joining via referral.`,
         type: 'POINTS_EARNED',
         tag: 'referral-welcome',
       }),

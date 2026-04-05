@@ -1,11 +1,12 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { PlatformWalletModule } from '../platform-wallet/platform-wallet.module';
 import { CustomersController } from './customers.controller';
 import { CustomersService } from './customers.service';
 
 @Module({
-  imports: [AuthModule, forwardRef(() => WalletModule)],
+  imports: [AuthModule, forwardRef(() => WalletModule), PlatformWalletModule],
   controllers: [CustomersController],
   providers: [CustomersService],
   exports: [CustomersService],

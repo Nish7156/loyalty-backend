@@ -101,6 +101,7 @@ model Customer {
   rewards            Reward[]
   feedbacks          Feedback[]
   wallets            Wallet[]
+  platformWallet     PlatformWallet?
   pushSubscriptions  PushSubscription[]
   referrals          Referral[]         @relation("ReferrerReferrals")
   referredVia        Referral?          @relation("ReferredReferrals")
@@ -226,6 +227,42 @@ model Wallet {
   @@unique([customerId, partnerId])
   @@index([customerId])
   @@index([partnerId])
+}
+
+enum PlatformTxType {
+  EARN
+  SPEND
+  ADJUST
+}
+
+model PlatformWallet {
+  id             String                      @id @default(uuid())
+  customerId     String                      @unique
+  balance        Decimal                     @default(0) @db.Decimal(10, 2)
+  lifetimeEarned Decimal                     @default(0) @db.Decimal(10, 2)
+  lifetimeSpent  Decimal                     @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  customer       Customer                    @relation(fields: [customerId], references: [phoneNumber], onDelete: Cascade)
+  transactions   PlatformWalletTransaction[]
+
+  @@index([customerId])
+}
+
+model PlatformWalletTransaction {
+  id            String         @id @default(uuid())
+  walletId      String
+  type          PlatformTxType
+  amount        Decimal        @db.Decimal(10, 2)
+  balanceBefore Decimal        @db.Decimal(10, 2)
+  balanceAfter  Decimal        @db.Decimal(10, 2)
+  description   String
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  wallet        PlatformWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([createdAt])
 }
 
 model WalletTransaction {
